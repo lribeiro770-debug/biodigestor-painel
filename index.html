@@ -1,0 +1,820 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel Biodigestor</title>
+<meta name="theme-color" content="#2a78d6">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Biodigestor">
+<!-- Painel de monitoramento (MQTT/WebSocket). Abra direto no navegador ou publique a pasta no GitHub Pages. -->
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<style>
+/* ---------- Tokens (paleta validada: categórica slots 1–2 + cinza de contexto; status fixo) ---------- */
+:root {
+  color-scheme: light;
+  --page: #f4f4f1; --surface: #fcfcfb; --surface-2: #f3f2ee; --ring: rgba(11,11,11,.10);
+  --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781; --grid: #e1e0d9; --axis: #c3c2b7;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --ctx: #9a9892;
+  --good: #0ca30c; --warn: #fab219; --serious: #ec835a; --crit: #d03b3b; --good-text: #006300;
+  --accent: #2a78d6; --wash-crit: #fbe9e8; --wash-warn: #fff4d9; --wash-good: #e8f5e8; --wash-serious: #fdeee7;
+  --shadow: 0 1px 2px rgba(11,11,11,.04), 0 4px 16px rgba(11,11,11,.04);
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --surface-2: #222220; --ring: rgba(255,255,255,.10);
+    --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781; --grid: #2c2c2a; --axis: #383835;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --ctx: #6f6e69;
+    --good-text: #0ca30c; --accent: #3987e5;
+    --wash-crit: #3a1d1c; --wash-warn: #3a2f12; --wash-good: #16301a; --wash-serious: #3a2419;
+    --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --surface-2: #222220; --ring: rgba(255,255,255,.10);
+  --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781; --grid: #2c2c2a; --axis: #383835;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --ctx: #6f6e69;
+  --good-text: #0ca30c; --accent: #3987e5;
+  --wash-crit: #3a1d1c; --wash-warn: #3a2f12; --wash-good: #16301a; --wash-serious: #3a2419;
+  --shadow: none;
+}
+* { box-sizing: border-box }
+body { margin: 0; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--page); color: var(--ink) }
+button, input, select, textarea { font: inherit; color: inherit }
+.wrap { max-width: 1320px; margin: 0 auto; padding: 0 20px 40px }
+
+/* ---------- Header ---------- */
+header { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--page) 88%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--ring) }
+.hdr { max-width: 1320px; margin: 0 auto; padding: 12px 20px; display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap }
+.brand { display: flex; gap: 12px; align-items: center }
+.logo { width: 34px; height: 34px; border-radius: 9px; background: var(--accent); display: grid; place-items: center }
+.logo svg { width: 20px; height: 20px }
+h1 { font-size: 16px; margin: 0; font-weight: 650 }
+.sub { color: var(--ink-2); font-size: 12.5px }
+.pills { display: flex; gap: 8px; flex-wrap: wrap; align-items: center }
+.pill { display: inline-flex; gap: 7px; align-items: center; padding: 5px 11px; border-radius: 99px; background: var(--surface); border: 1px solid var(--ring); font-size: 12.5px; color: var(--ink-2) }
+.pill b { color: var(--ink); font-weight: 600 }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none }
+.sim { background: var(--wash-warn); border-color: transparent; color: var(--ink); font-weight: 600 }
+
+/* ---------- Filtros ---------- */
+.filters { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 18px 0 14px }
+.seg { display: inline-flex; background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 3px; flex-wrap: wrap }
+.seg button { border: 0; background: transparent; padding: 6px 12px; border-radius: 7px; cursor: pointer; color: var(--ink-2); font-weight: 500 }
+.seg button[aria-pressed="true"] { background: var(--surface-2); color: var(--ink); box-shadow: inset 0 0 0 1px var(--ring) }
+.custom { display: none; gap: 6px; align-items: center; color: var(--ink-2); font-size: 12.5px }
+.custom.on { display: inline-flex }
+.custom input { background: var(--surface); border: 1px solid var(--ring); border-radius: 8px; padding: 5px 8px }
+.spacer { flex: 1 }
+label.btn { font-size: 14px; color: var(--ink) }
+.btn { border: 1px solid var(--ring); background: var(--surface); padding: 6px 12px; border-radius: 9px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; color: var(--ink) }
+.btn:hover { background: var(--surface-2) }
+.btn.primary { background: var(--accent); color: #fff; border-color: transparent }
+.btn.danger { color: var(--crit) }
+.rangeinfo { color: var(--muted); font-size: 12px }
+
+/* ---------- Banner de alarmes ---------- */
+#banner { border-radius: 12px; padding: 12px 16px; display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px; border: 1px solid var(--ring) }
+#banner .ic { width: 22px; height: 22px; flex: none; margin-top: 1px }
+#banner h3 { margin: 0; font-size: 14.5px }
+#banner ul { margin: 4px 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--ink-2); font-size: 13px }
+#banner .acts { margin-left: auto; display: flex; gap: 8px }
+.b-ok { background: var(--wash-good) } .b-warn { background: var(--wash-warn) } .b-crit { background: var(--wash-crit); border-color: color-mix(in srgb, var(--crit) 35%, transparent) !important }
+.b-serious { background: var(--wash-serious) }
+.b-crit.pulse { animation: pulse 1.6s ease-in-out infinite }
+@keyframes pulse { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--crit) 18%, transparent) } }
+@media (prefers-reduced-motion: reduce) { .b-crit.pulse { animation: none } }
+
+/* ---------- Cards / KPIs ---------- */
+.card { background: var(--surface); border: 1px solid var(--ring); border-radius: 14px; box-shadow: var(--shadow) }
+.kpis { display: grid; grid-template-columns: 1.35fr repeat(4, 1fr); gap: 12px }
+@media (max-width: 1100px) { .kpis { grid-template-columns: repeat(2, 1fr) } .kpis .hero { grid-column: 1 / -1 } }
+}
+.kpi { padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; min-height: 132px; position: relative }
+.kpi .lbl { color: var(--ink-2); font-size: 12.5px; display: flex; justify-content: space-between; gap: 8px }
+.kpi .val { font-size: 28px; font-weight: 620; letter-spacing: -.01em }
+.kpi .val small { font-size: 14px; color: var(--muted); font-weight: 500; margin-left: 3px }
+.hero .val { font-size: 48px; line-height: 1.05 }
+.kpi .meta { color: var(--muted); font-size: 12px }
+.delta { font-size: 12px; font-weight: 600; color: var(--ink-2) }
+.spark { width: 100%; height: 30px; margin-top: auto }
+.meter { position: relative; height: 8px; border-radius: 99px; background: color-mix(in srgb, var(--accent) 16%, var(--surface)); margin: 8px 0 2px }
+.meter .band { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--good) 35%, transparent); border-radius: 99px }
+.meter .mark { position: absolute; top: -4px; width: 4px; height: 16px; border-radius: 2px; background: var(--ink); transform: translateX(-2px) }
+.meter-l { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px }
+.tag { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 99px; white-space: nowrap }
+.t-ok { background: var(--wash-good); color: var(--good-text) } .t-warn { background: var(--wash-warn); color: var(--ink) }
+.t-crit { background: var(--wash-crit); color: var(--crit) } .t-muted { background: var(--surface-2); color: var(--ink-2) }
+
+/* ---------- Componentes ---------- */
+.sect { display: flex; align-items: baseline; justify-content: space-between; margin: 22px 2px 10px; gap: 10px; flex-wrap: wrap }
+.sect h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2); margin: 0; font-weight: 600 }
+.sect span { color: var(--muted); font-size: 12px }
+.comps { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 10px }
+.comp { padding: 11px 13px; display: grid; grid-template-columns: 30px 1fr; gap: 2px 10px; align-items: center }
+.comp .ci { grid-row: span 2; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: var(--surface-2) }
+.comp .ci svg { width: 17px; height: 17px }
+.comp .cn { font-weight: 600; font-size: 13px; display: flex; justify-content: space-between; gap: 6px; align-items: center }
+.comp .cv { color: var(--ink-2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center }
+.st { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; white-space: nowrap }
+.st svg { width: 13px; height: 13px }
+.bars { display: inline-flex; gap: 2px; align-items: flex-end; height: 12px; margin-left: 6px }
+.bars i { width: 3px; background: var(--grid); border-radius: 1px } .bars i.on { background: var(--ink-2) }
+
+/* ---------- Gráficos ---------- */
+.charts { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px }
+.charts .card { padding: 14px 16px 10px; display: flex; flex-direction: column; min-width: 0 }
+.w4 { grid-column: span 4 } .w3 { grid-column: span 3 } .w2 { grid-column: span 2 }
+@media (max-width: 1000px) { .w4, .w3, .w2 { grid-column: span 6 } }
+.ch-h { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 6px; flex-wrap: wrap }
+.ch-h h3 { margin: 0; font-size: 14px; font-weight: 620 }
+.ch-h p { margin: 2px 0 0; color: var(--muted); font-size: 12px }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--ink-2) }
+.legend span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap }
+.legend i { width: 14px; height: 2px; border-radius: 2px; display: inline-block }
+.legend b { color: var(--ink); font-weight: 600 }
+.cv-box { position: relative; height: 250px } .cv-box.sm { height: 200px }
+.empty { position: absolute; inset: 0; display: none; place-items: center; color: var(--muted); font-size: 13px; text-align: center; padding: 20px; background: var(--surface) }
+.empty.on { display: grid }
+
+/* ---------- Tabela ---------- */
+table { width: 100%; border-collapse: collapse; font-size: 13px }
+th, td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; white-space: nowrap }
+th:first-child, td:first-child { text-align: left }
+th { color: var(--muted); font-weight: 500; font-size: 12px }
+.tbl { overflow-x: auto; padding: 4px 8px 8px }
+
+/* ---------- Operação ---------- */
+.ops { display: grid; grid-template-columns: 1.2fr 1fr; gap: 12px }
+@media (max-width: 1000px) { .ops { grid-template-columns: 1fr } }
+.pad { padding: 16px; min-width: 0 }
+.pad h3 { margin: 0 0 10px; font-size: 14px }
+label { display: block; font-size: 12px; color: var(--ink-2); margin: 8px 0 4px }
+.in { width: 100%; padding: 7px 10px; border: 1px solid var(--ring); border-radius: 9px; background: var(--surface-2) }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0 12px }
+.cmdg h4 { margin: 12px 0 6px; font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .05em }
+.cmdg .row { display: flex; gap: 6px; flex-wrap: wrap }
+details summary { cursor: pointer; color: var(--ink-2); font-weight: 600 }
+pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; color: var(--ink-2); max-height: 180px; overflow: auto; margin: 8px 0 0; background: var(--surface-2); padding: 8px 10px; border-radius: 9px }
+.hid { display: none !important }
+.foot { color: var(--muted); font-size: 12px; margin-top: 18px; text-align: center }
+@media (max-width: 560px) {
+  header { position: static } .hdr { padding: 10px 14px } .wrap { padding: 0 12px 32px } .pill { font-size: 12px }
+  .kpis { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) } .kpi { min-height: 118px; padding: 12px; min-width: 0 }
+  .kpi .val { font-size: 24px } .hero .val { font-size: 44px } .kpi .lbl { flex-direction: column; gap: 4px } .kpi .lbl .tag { align-self: flex-start }
+  .comps { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) } .comp { grid-template-columns: 1fr } .comp .ci { display: none }
+  .comp .cn { flex-direction: column; align-items: flex-start; gap: 2px }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="hdr">
+    <div class="brand">
+      <div class="logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c3 4 6 6.5 6 10a6 6 0 0 1-12 0c0-3.5 3-6 6-10z"/><path d="M12 17a2.5 2.5 0 0 0 2.5-2.5"/></svg></div>
+      <div><h1>Biodigestor · UTFPR Campo Mourão</h1><div class="sub" id="devinfo">conectando…</div></div>
+    </div>
+    <div class="pills">
+      <span class="pill sim hid" id="pSim">Dados simulados</span>
+      <span class="pill"><span class="dot" id="dDev"></span><span id="sDev">dispositivo</span></span>
+      <span class="pill"><span class="dot" id="dBroker"></span><span id="sBroker">servidor</span></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <!-- Filtro único: escopa tudo abaixo -->
+  <div class="filters" role="toolbar" aria-label="Período">
+    <div class="seg" id="seg">
+      <button data-h="1" aria-pressed="false">1 h · ao vivo</button>
+      <button data-h="6" aria-pressed="false">6 h</button>
+      <button data-h="24" aria-pressed="true">24 h</button>
+      <button data-h="48" aria-pressed="false">48 h</button>
+      <button data-h="all" aria-pressed="false">Tudo</button>
+      <button data-h="custom" aria-pressed="false">Personalizado</button>
+    </div>
+    <div class="custom" id="custom">de <input type="datetime-local" id="dFrom"> até <input type="datetime-local" id="dTo"></div>
+    <span class="rangeinfo" id="rangeinfo"></span>
+    <span class="spacer"></span>
+    <label class="btn" style="margin:0">Importar CSV<input type="file" id="fCsv" accept=".csv,text/csv" multiple class="hid"></label>
+    <button class="btn" id="bCsv">Exportar período</button>
+  </div>
+
+  <div id="banner" class="b-ok"></div>
+
+  <div class="kpis">
+    <div class="card kpi hero">
+      <div class="lbl"><span>Temperatura do digestato</span><span id="tDigTag"></span></div>
+      <div class="val" id="kT1">—</div>
+      <div class="meter" aria-hidden="true"><div class="band" id="mBand"></div><div class="mark" id="mMark"></div></div>
+      <div class="meter-l"><span id="mMin"></span><span id="mTxt">faixa alvo</span><span id="mMax"></span></div>
+      <div class="meta"><span class="delta" id="kT1d"></span> <span id="kT1m"></span></div>
+    </div>
+    <div class="card kpi">
+      <div class="lbl"><span>Estratificação (ΔT)</span><span id="dtTag"></span></div>
+      <div class="val" id="kDT">—</div>
+      <div class="meta">sonda 1 − sonda 2</div>
+      <svg class="spark" id="spDT" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="card kpi">
+      <div class="lbl"><span>Ambiente</span></div>
+      <div class="val" id="kTA">—</div>
+      <div class="meta" id="kTAm"></div>
+      <svg class="spark" id="spTA" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="card kpi">
+      <div class="lbl"><span>Biogás no período</span></div>
+      <div class="val" id="kV">—</div>
+      <div class="meta" id="kVm"></div>
+      <svg class="spark" id="spV" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="card kpi">
+      <div class="lbl"><span>Vazamento (MQ-2)</span><span id="gasTag"></span></div>
+      <div class="val" id="kG">—</div>
+      <div class="meta">Rs/R0 · 1,00 = ar limpo</div>
+      <svg class="spark" id="spG" preserveAspectRatio="none"></svg>
+    </div>
+  </div>
+
+  <div class="sect"><h2>Componentes</h2><span id="compInfo"></span></div>
+  <div class="comps" id="comps"></div>
+
+  <div class="sect"><h2>Tendências</h2><span id="chInfo">médias de 5 min (histórico) + leituras de 30 s (ao vivo)</span></div>
+  <div class="charts">
+    <div class="card w4">
+      <div class="ch-h"><div><h3>Temperaturas</h3><p>Faixa verde = alvo do digestato</p></div><div class="legend" id="lgT"></div></div>
+      <div class="cv-box"><canvas id="chT" aria-label="Gráfico de temperaturas"></canvas><div class="empty" id="emT">Sem dados no período</div></div>
+    </div>
+    <div class="card w2">
+      <div class="ch-h"><div><h3>Produção de biogás</h3><p id="pvSub">NL por hora</p></div></div>
+      <div class="cv-box"><canvas id="chV" aria-label="Produção de biogás por intervalo"></canvas><div class="empty" id="emV">Sem medição de volume<br>(sensor de pressão ainda não instalado)</div></div>
+    </div>
+    <div class="card w2">
+      <div class="ch-h"><div><h3>Estratificação</h3><p>ΔT entre as sondas · linha = limite</p></div></div>
+      <div class="cv-box sm"><canvas id="chDT"></canvas><div class="empty" id="emDT">Sem dados no período</div></div>
+    </div>
+    <div class="card w2">
+      <div class="ch-h"><div><h3>Pressão do headspace</h3><p>Pa · linha = abertura da válvula</p></div></div>
+      <div class="cv-box sm"><canvas id="chP"></canvas><div class="empty" id="emP">Sensor de pressão não instalado</div></div>
+    </div>
+    <div class="card w2">
+      <div class="ch-h"><div><h3>Sensores de gás</h3><p>Rs/R0 · abaixo de 0,50 = alarme</p></div><div class="legend" id="lgG"></div></div>
+      <div class="cv-box sm"><canvas id="chG"></canvas><div class="empty" id="emG">Sem dados no período</div></div>
+    </div>
+    <div class="card w3">
+      <div class="ch-h"><div><h3>Umidade relativa do ar</h3><p>% · acima de 90 % = risco de condensação</p></div></div>
+      <div class="cv-box sm"><canvas id="chU"></canvas><div class="empty" id="emU">Sem dados no período</div></div>
+    </div>
+    <div class="card w3">
+      <div class="ch-h"><div><h3>Linha do tempo de alarmes</h3><p>número de alarmes ativos por intervalo</p></div></div>
+      <div class="cv-box sm"><canvas id="chA"></canvas><div class="empty" id="emA">Nenhum alarme no período</div></div>
+    </div>
+  </div>
+
+  <div class="sect"><h2>Estatísticas do período</h2><span id="stInfo"></span></div>
+  <div class="card tbl"><table id="stats"><thead><tr><th>Variável</th><th>Mín.</th><th>Média</th><th>Máx.</th><th>Última</th><th>Amostras</th><th>Fora da faixa</th></tr></thead><tbody></tbody></table></div>
+
+  <div class="sect"><h2>Operação</h2><span>diário, comandos e conexão</span></div>
+  <div class="ops">
+    <div class="card pad">
+      <h3>Diário de operação</h3>
+      <div class="grid2">
+        <div><label for="dTipo">Tipo</label>
+          <select id="dTipo" class="in">
+            <option value="alimentacao">Alimentação (kg)</option><option value="ph">pH (fita/medidor)</option>
+            <option value="co2">Teste de CO₂ com NaOH</option><option value="queima">Teste de queima</option>
+            <option value="retirada">Retirada de digestato (L)</option><option value="vhead">Novo volume de headspace (L)</option>
+            <option value="obs">Observação</option>
+          </select></div>
+        <div id="dVal"><label id="dValLbl" for="dValor">Valor</label><input id="dValor" class="in" inputmode="decimal"></div>
+        <div id="dCo2" class="hid"><label>Volume inicial / residual (mL)</label>
+          <div style="display:flex;gap:6px"><input id="dVi" class="in" placeholder="Vi" inputmode="decimal"><input id="dVf" class="in" placeholder="Vf" inputmode="decimal"></div></div>
+        <div id="dChama" class="hid"><label for="dChamaSel">Chama</label>
+          <select id="dChamaSel" class="in"><option>azul estável</option><option>azul com pontas amarelas</option><option>amarela/instável</option><option>não acendeu</option></select></div>
+        <div><label for="dAutor">Responsável</label><input id="dAutor" class="in" placeholder="nome"></div>
+      </div>
+      <label for="dObs">Observação</label><textarea id="dObs" class="in" rows="2"></textarea>
+      <div class="sub" id="dCalc" style="margin-top:6px">&nbsp;</div>
+      <button class="btn primary" id="bDiario" style="margin-top:8px">Registrar</button>
+      <table style="margin-top:12px"><thead><tr><th>Quando</th><th style="text-align:left">Tipo</th><th>Valor</th><th style="text-align:left">Obs.</th></tr></thead><tbody id="dLista"></tbody></table>
+    </div>
+    <div class="card pad">
+      <h3>Comandos</h3>
+      <label for="iArg">Valor (para comandos que pedem)</label><input id="iArg" class="in" placeholder="ex.: 980 (Pa) · 18,5 (L) · https://…/firmware.bin">
+      <div class="cmdg">
+        <h4>Alarmes</h4><div class="row">
+          <button class="btn" data-cmd="silenciar">Silenciar 30 min</button><button class="btn" data-cmd="rele_teste">Testar relé</button><button class="btn" data-cmd="telegram_teste">Testar Telegram</button></div>
+        <h4>Simulação</h4><div class="row">
+          <button class="btn" data-cmd="simular:1">Ativar</button><button class="btn" data-cmd="simular:0">Desativar</button><button class="btn" data-cmd="simular_vazamento">Simular vazamento</button></div>
+        <h4>Calibração</h4><div class="row">
+          <button class="btn" data-cmd="calibrar">MQ em ar limpo</button><button class="btn" data-cmd="zerar_pressao">Zerar pressão</button>
+          <button class="btn" data-cmd="cal_pressao" data-arg>Pressão (Pa)</button><button class="btn" data-cmd="vhead" data-arg>V headspace (L)</button></div>
+        <h4>Sistema</h4><div class="row">
+          <button class="btn" data-cmd="ping" data-open>Ping</button><button class="btn" data-cmd="status" data-open>Status</button>
+          <button class="btn" data-cmd="zerar_volume">Zerar volume</button><button class="btn" data-cmd="ota" data-arg>Atualizar firmware</button>
+          <button class="btn danger" data-cmd="reiniciar">Reiniciar</button></div>
+      </div>
+      <label>Eventos do dispositivo</label><pre id="log"></pre>
+      <details style="margin-top:12px"><summary>Conexão</summary>
+        <div class="grid2">
+          <div><label for="iUrl">Servidor (WebSocket seguro)</label><input id="iUrl" class="in"></div>
+          <div><label for="iTopic">Tópico base</label><input id="iTopic" class="in"></div>
+          <div><label for="iUser">Usuário</label><input id="iUser" class="in"></div>
+          <div><label for="iPass">Senha</label><input id="iPass" class="in" type="password"></div>
+          <div><label for="iTok">Token de comando</label><input id="iTok" class="in" type="password"></div>
+          <div><label for="iLim">Faixa alvo do digestato (°C)</label><input id="iLim" class="in" placeholder="20 / 40"></div>
+        </div>
+        <button class="btn primary" id="bConn" style="margin-top:10px">Salvar e reconectar</button>
+      </details>
+    </div>
+  </div>
+  <div class="foot">Histórico no ESP32: médias de 5 min das últimas 48 h. Períodos maiores: importe o CSV do registrador (servidor/logger_mqtt.py).</div>
+</div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const DEF = { url: "wss://broker.hivemq.com:8884/mqtt", topic: "utfpr-cm/biodigestor/k7q2/biodig-utfpr-cm-01",
+              user: "", pass: "", tok: "", lim: "20 / 40", autor: "" };   // token NUNCA fica no arquivo publicado
+let cfg = { ...DEF };
+try { cfg = { ...DEF, ...JSON.parse(localStorage.getItem("bioCfg") || "{}") }; } catch (e) {}
+for (const k of ["url", "topic", "lim"]) if (!cfg[k]) cfg[k] = DEF[k];
+const saveCfg = () => { try { localStorage.setItem("bioCfg", JSON.stringify(cfg)); } catch (e) {} };
+for (const [k, id] of [["url","iUrl"],["topic","iTopic"],["user","iUser"],["pass","iPass"],["tok","iTok"],["lim","iLim"],["autor","dAutor"]]) $(id).value = cfg[k] || "";
+
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const num = s => parseFloat(String(s).replace(",", "."));
+const f = (v, n = 1) => (v == null || Number.isNaN(v)) ? "—" : Number(v).toLocaleString("pt-BR", { minimumFractionDigits: n, maximumFractionDigits: n });
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const lim = () => { const [a, b] = (cfg.lim || "20/40").split("/").map(num); return [isNaN(a) ? 20 : a, isNaN(b) ? 40 : b]; };
+const LIMITES = { dt: 3, ur: 90, gas: 0.5, pAbre: 1000, pMax: 2500 };
+
+// ---------------------------------------------------------------- Ícones (status sempre com ícone + rótulo, nunca só cor)
+const svgI = p => `<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+const IC = {
+  ok: svgI('<circle cx="8" cy="8" r="6.5"/><path d="M5 8.2l2 2 4-4.2"/>'),
+  warn: svgI('<path d="M8 2l6.5 11.5h-13z"/><path d="M8 6.5v3M8 11.6v.1"/>'),
+  crit: svgI('<circle cx="8" cy="8" r="6.5"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5"/>'),
+  off: svgI('<circle cx="8" cy="8" r="6.5"/><path d="M5 8h6"/>'),
+  wait: svgI('<circle cx="8" cy="8" r="6.5"/><path d="M8 4.5V8l2.5 1.5"/>')
+};
+const ST = { ok: ["ok", "var(--good-text)", "var(--good)"], warn: ["warn", "var(--ink)", "var(--warn)"], crit: ["crit", "var(--crit)", "var(--crit)"],
+             off: ["off", "var(--muted)", "var(--axis)"], wait: ["wait", "var(--ink-2)", "var(--axis)"] };
+const stBadge = (s, txt) => `<span class="st" style="color:${ST[s][1]}">${IC[ST[s][0]]}${esc(txt)}</span>`;
+const tag = (cls, ic, txt) => `<span class="tag ${cls}">${ic ? IC[ic] : ""}${esc(txt)}</span>`;
+const ci = p => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+const CI = {
+  chip: ci('<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/>'),
+  wifi: ci('<path d="M2 8.5a15 15 0 0 1 20 0M5 12a10 10 0 0 1 14 0M8.5 15.5a5 5 0 0 1 7 0"/><circle cx="12" cy="19" r="1"/>'),
+  therm: ci('<path d="M14 14.8V4a2 2 0 0 0-4 0v10.8a4 4 0 1 0 4 0z"/>'),
+  drop: ci('<path d="M12 3c3 4 6 6.5 6 10a6 6 0 0 1-12 0c0-3.5 3-6 6-10z"/>'),
+  gas: ci('<path d="M4 16c2-2 4 2 6 0s4 2 6 0 4 2 4 2M4 11c2-2 4 2 6 0s4 2 6 0 4 2 4 2M4 6c2-2 4 2 6 0s4 2 6 0 4 2 4 2"/>'),
+  gauge: ci('<path d="M4 17a8 8 0 1 1 16 0"/><path d="M12 17l4-5"/>'),
+  relay: ci('<path d="M3 12h5l4-4M16 12h5"/><circle cx="8" cy="12" r="1.2"/><circle cx="16" cy="12" r="1.2"/>'),
+  bell: ci('<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/>'),
+  valve: ci('<path d="M3 9v6l9-3zM21 9v6l-9-3zM12 12V6M9 6h6"/>'),
+  box: ci('<path d="M4 7l8-4 8 4v10l-8 4-8-4z"/><path d="M4 7l8 4 8-4M12 11v10"/>')
+};
+
+// ---------------------------------------------------------------- Alarmes: severidade e textos
+const AL = {
+  GAS_COMBUSTIVEL: ["crit", "Possível vazamento de gás combustível (MQ-2)"], MQ7_ALTERADO: ["crit", "MQ-7 alterado (gás/CO)"],
+  CO_ALTO: ["crit", "Monóxido de carbono acima do limite"], SOBREPRESSAO: ["crit", "Sobrepressão no biodigestor"],
+  T_DIG_BAIXA: ["warn", "Temperatura do digestato baixa"], T_DIG_ALTA: ["warn", "Temperatura do digestato alta"],
+  T_DIG_VARIACAO_RAPIDA: ["warn", "Variação rápida de temperatura"], ESTRATIFICACAO: ["warn", "Estratificação (falta de mistura)"],
+  UMIDADE_ALTA: ["warn", "Umidade alta — risco de condensação"],
+  SENSOR_T_DIG1: ["serious", "Sonda DS18B20 #1 sem leitura"], SENSOR_T_DIG2: ["serious", "Sonda DS18B20 #2 sem leitura"],
+  SENSOR_DHT: ["serious", "DHT11 sem leitura"], SENSOR_MQ2: ["serious", "MQ-2 sem leitura"], SENSOR_MQ7: ["serious", "MQ-7 sem leitura"],
+  SENSOR_PRESSAO: ["serious", "Sensor de pressão sem leitura"], MQ_NAO_CALIBRADO: ["info", "Sensores MQ ainda não calibrados"]
+};
+const alSince = new Map();
+
+// ---------------------------------------------------------------- Estado
+// Registro: { x(ms), t1, t2, ta, ur, g2, g7, p, vol, nal, sim, src: "live" | "hist" | "csv" }
+const store = new Map();
+let last = null, lastMsg = 0, devStatus = "", client = null, histPts = 0;
+const diario = [];
+const range = { mode: "24" };
+
+function addRec(r) {
+  const k = Math.round(r.x / 1000), cur = store.get(k);
+  if (cur && cur.src === "live" && r.src !== "live") return;   // leitura ao vivo prevalece sobre média
+  store.set(k, r);
+}
+function recFromTelem(j) {
+  return { x: j.ts ? j.ts * 1000 : Date.now(), t1: j.t_dig, t2: j.t_dig2, ta: j.t_amb, ur: j.ur_amb,
+           g2: j.gas_ok ? j.mq2?.rel : null, g7: j.gas_ok ? j.mq7?.rel : null, p: j.p_pa, vol: j.vol_nl ?? j.vol_l,
+           nal: (j.alarmes || []).filter(a => a !== "MQ_NAO_CALIBRADO").length, sim: !!j.sim, src: "live" };
+}
+const sortedAll = () => [...store.values()].sort((a, b) => a.x - b.x);
+function curRange() {
+  const now = Date.now();
+  if (range.mode === "custom") { const a = Date.parse($("dFrom").value), b = Date.parse($("dTo").value); return [isNaN(a) ? now - 864e5 : a, isNaN(b) ? now : b]; }
+  if (range.mode === "all") { const all = sortedAll(); return [all.length ? all[0].x : now - 864e5, Math.max(now, all.length ? all.at(-1).x : now)]; }
+  return [now - Number(range.mode) * 3600e3, now];
+}
+const filtered = () => { const [a, b] = curRange(); return sortedAll().filter(r => r.x >= a && r.x <= b); };
+
+// ---------------------------------------------------------------- Gráficos (1 eixo por gráfico · linhas 2px · grade hairline)
+Chart.defaults.font.family = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+Chart.defaults.font.size = 11.5;
+Chart.register({
+  id: "refs",
+  beforeDatasetsDraw(ch, _a, o) {
+    const { ctx, chartArea: A, scales: { y } } = ch; if (!y || !A) return;
+    ctx.save();
+    for (const b of o.bands || []) {
+      const y1 = Math.max(A.top, y.getPixelForValue(b.to)), y2 = Math.min(A.bottom, y.getPixelForValue(b.from));
+      if (y2 > y1) { ctx.fillStyle = b.color; ctx.fillRect(A.left, y1, A.right - A.left, y2 - y1); }
+    }
+    for (const l of o.lines || []) {
+      const py = y.getPixelForValue(l.y); if (py < A.top || py > A.bottom) continue;
+      ctx.strokeStyle = l.color; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(A.left, py); ctx.lineTo(A.right, py); ctx.stroke();
+      if (l.label) { ctx.fillStyle = css("--muted"); ctx.font = "11px system-ui"; ctx.textAlign = "right"; ctx.fillText(l.label, A.right - 4, py - 4); }
+    }
+    ctx.restore();
+  },
+  afterDatasetsDraw(ch) {                                 // crosshair
+    const t = ch.tooltip; if (!t || !t.getActiveElements().length || ch.config.type !== "line") return;
+    const x = t.getActiveElements()[0].element.x, { ctx, chartArea: A } = ch;
+    ctx.save(); ctx.strokeStyle = css("--axis"); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x, A.top); ctx.lineTo(x, A.bottom); ctx.stroke(); ctx.restore();
+  }
+});
+const charts = {};
+function baseOpts(unit, dec, extra = {}) {
+  return {
+    animation: false, maintainAspectRatio: false, parsing: false, spanGaps: 15 * 60e3,
+    interaction: { mode: "index", intersect: false },
+    layout: { padding: { top: 4, right: 6 } },
+    scales: {
+      x: { type: "time", time: { tooltipFormat: "dd/MM HH:mm", displayFormats: { minute: "HH:mm", hour: "HH'h'", day: "dd/MM" } },
+           ticks: { color: css("--muted"), maxRotation: 0, autoSkipPadding: 18 }, grid: { color: css("--grid"), drawTicks: false }, border: { color: css("--axis") } },
+      y: { ticks: { color: css("--muted"), callback: v => f(v, dec) }, grid: { color: css("--grid"), drawTicks: false }, border: { display: false }, ...(extra.y || {}) }
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: { backgroundColor: css("--surface"), titleColor: css("--ink-2"), bodyColor: css("--ink"), borderColor: css("--ring"), borderWidth: 1,
+                 padding: 10, boxWidth: 12, boxHeight: 2, bodyFont: { weight: "600" },
+                 callbacks: { label: c => ` ${f(c.parsed.y, dec)} ${unit}  ·  ${c.dataset.label}` } },
+      refs: extra.refs || {}
+    }
+  };
+}
+const line = (label, color, fill = false) => ({ label, borderColor: color, backgroundColor: fill ? color + "1a" : color, data: [], borderWidth: 2, pointRadius: 0,
+  pointHoverRadius: 4, pointHoverBorderWidth: 2, pointHoverBorderColor: css("--surface"), tension: .25, fill, borderCapStyle: "round", borderJoinStyle: "round" });
+const bar = (label, color) => ({ label, data: [], backgroundColor: color, borderRadius: { topLeft: 4, topRight: 4 }, borderSkipped: "bottom", maxBarThickness: 24, barPercentage: .85, categoryPercentage: .9 });
+function buildCharts() {
+  for (const c of Object.values(charts)) c.destroy();
+  const s1 = css("--s1"), s2 = css("--s2"), cx = css("--ctx"), crit = css("--crit");
+  charts.T = new Chart($("chT"), { type: "line", data: { datasets: [line("Sonda 1", s1), line("Sonda 2", s2), { ...line("Ambiente", cx), borderWidth: 1.5 }] }, options: baseOpts("°C", 1, { refs: { bands: [] } }) });
+  charts.DT = new Chart($("chDT"), { type: "line", data: { datasets: [line("ΔT", s1, true)] }, options: baseOpts("°C", 1, { refs: { lines: [{ y: LIMITES.dt, color: crit, label: "limite" }] } }) });
+  charts.P = new Chart($("chP"), { type: "line", data: { datasets: [line("Pressão", s1)] }, options: baseOpts("Pa", 0, { y: { beginAtZero: true }, refs: { lines: [{ y: LIMITES.pAbre, color: css("--axis"), label: "abre válvula" }] } }) });
+  charts.G = new Chart($("chG"), { type: "line", data: { datasets: [line("MQ-2", s1), line("MQ-7", s2)] }, options: baseOpts("", 2, { y: { suggestedMin: 0.3, suggestedMax: 1.1 }, refs: { lines: [{ y: LIMITES.gas, color: crit, label: "alarme" }] } }) });
+  charts.U = new Chart($("chU"), { type: "line", data: { datasets: [line("Umidade", s1, true)] }, options: baseOpts("%", 0, { y: { suggestedMin: 30, suggestedMax: 100 }, refs: { lines: [{ y: LIMITES.ur, color: crit, label: "condensação" }] } }) });
+  charts.V = new Chart($("chV"), { type: "bar", data: { datasets: [bar("Biogás", s1)] }, options: { ...baseOpts("NL", 2, { y: { beginAtZero: true } }), interaction: { mode: "nearest", intersect: false, axis: "x" } } });
+  charts.A = new Chart($("chA"), { type: "bar", data: { datasets: [bar("Alarmes ativos", css("--serious"))] },
+    options: { ...baseOpts("", 0, { y: { beginAtZero: true, suggestedMax: 3, ticks: { precision: 0, color: css("--muted") } } }), interaction: { mode: "nearest", intersect: false, axis: "x" } } });
+}
+
+// ---------------------------------------------------------------- Cálculos
+const series = (rows, k) => rows.map(r => ({ x: r.x, y: r[k] ?? null }));
+const has = (rows, k) => rows.some(r => r[k] != null);
+const bucketMs = span => span <= 3 * 3600e3 ? 10 * 60e3 : span <= 30 * 3600e3 ? 3600e3 : 3 * 3600e3;
+const bucketLbl = ms => ms === 600e3 ? "NL a cada 10 min" : ms === 3600e3 ? "NL por hora" : "NL a cada 3 h";
+function producao(rows, ms) {    // soma dos incrementos do volume acumulado (ignora zeragens)
+  const out = new Map(); let prev = null;
+  for (const r of rows) { if (r.vol == null) continue;
+    if (prev != null && r.vol >= prev) { const b = Math.floor(r.x / ms) * ms + ms / 2; out.set(b, (out.get(b) || 0) + (r.vol - prev)); }
+    prev = r.vol; }
+  return [...out].map(([x, y]) => ({ x, y: +y.toFixed(3) }));
+}
+function alarmSeries(rows, ms) {
+  const out = new Map();
+  for (const r of rows) { if (!r.nal) continue; const b = Math.floor(r.x / ms) * ms + ms / 2; out.set(b, Math.max(out.get(b) || 0, r.nal)); }
+  return [...out].map(([x, y]) => ({ x, y }));
+}
+function valueAt(rows, k, t) { let v = null; for (const r of rows) { if (r.x > t) break; if (r[k] != null) v = r[k]; } return v; }
+function sparkline(svg, pts, color) {
+  pts = pts.filter(p => p.y != null); svg.innerHTML = ""; if (pts.length < 2) return;
+  const W = 200, H = 30, x0 = pts[0].x, x1 = pts.at(-1).x, ys = pts.map(p => p.y), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const sx = x => (x - x0) / (x1 - x0 || 1) * W, sy = y => H - 4 - (y - y0) / (y1 - y0 || 1) * (H - 8);
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const d = pts.map((p, i) => (i ? "L" : "M") + sx(p.x).toFixed(1) + " " + sy(p.y).toFixed(1)).join("");
+  svg.innerHTML = `<path d="${d}" fill="none" stroke="${css("--ctx")}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+    <circle cx="${sx(pts.at(-1).x)}" cy="${sy(pts.at(-1).y)}" r="3" fill="${color}" stroke="${css("--surface")}" stroke-width="1.5"/>`;
+}
+
+// ---------------------------------------------------------------- Renderização
+let pend = false;
+function render() { if (pend) return; pend = true; requestAnimationFrame(() => { pend = false; doRender(); }); }
+function doRender() {
+  const rows = filtered(), [a, b] = curRange(), span = b - a, all = sortedAll(), lt = last || {};
+  const lastOf = k => { for (let i = rows.length - 1; i >= 0; i--) if (rows[i][k] != null) return rows[i][k]; return null; };
+  $("rangeinfo").textContent = rows.length ? `${new Date(a).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })} → ${new Date(b).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })} · ${rows.length} pontos` : "sem dados no período";
+  for (const c of Object.values(charts)) { c.options.scales.x.min = a; c.options.scales.x.max = b; }
+  const [tmin, tmax] = lim();
+
+  charts.T.options.plugins.refs.bands = [{ from: tmin, to: tmax, color: css("--good") + "14" }];
+  charts.T.data.datasets.forEach((d, i) => d.data = series(rows, ["t1", "t2", "ta"][i]));
+  charts.DT.data.datasets[0].data = rows.map(r => ({ x: r.x, y: (r.t1 != null && r.t2 != null) ? +(r.t1 - r.t2).toFixed(2) : null }));
+  charts.P.data.datasets[0].data = series(rows, "p");
+  charts.G.data.datasets[0].data = series(rows, "g2"); charts.G.data.datasets[1].data = series(rows, "g7");
+  charts.U.data.datasets[0].data = series(rows, "ur");
+  const bms = bucketMs(span); $("pvSub").textContent = bucketLbl(bms);
+  const prodS = producao(rows, bms); charts.V.data.datasets[0].data = prodS;
+  charts.A.data.datasets[0].data = alarmSeries(rows, span <= 6 * 3600e3 ? 5 * 60e3 : 30 * 60e3);
+  const em = (id, on) => $(id).classList.toggle("on", on);
+  em("emT", !has(rows, "t1") && !has(rows, "t2") && !has(rows, "ta")); em("emDT", !rows.some(r => r.t1 != null && r.t2 != null));
+  em("emP", !has(rows, "p")); em("emG", !has(rows, "g2") && !has(rows, "g7")); em("emU", !has(rows, "ur"));
+  em("emV", !has(rows, "vol")); em("emA", !rows.some(r => r.nal));
+  for (const c of Object.values(charts)) c.update("none");
+
+  $("lgT").innerHTML = [["Sonda 1", "--s1", "t1"], ["Sonda 2", "--s2", "t2"], ["Ambiente", "--ctx", "ta"]].map(([n, c, k]) => `<span><i style="background:var(${c})"></i>${n} <b>${f(lastOf(k))} °C</b></span>`).join("");
+  $("lgG").innerHTML = [["MQ-2", "--s1", "g2"], ["MQ-7", "--s2", "g7"]].map(([n, c, k]) => `<span><i style="background:var(${c})"></i>${n} <b>${f(lastOf(k), 2)}</b></span>`).join("");
+
+  // ---- KPI principal: temperatura do digestato + faixa alvo
+  const t1 = lt.t_dig ?? lastOf("t1");
+  $("kT1").innerHTML = t1 == null ? "—" : `${f(t1)}<small>°C</small>`;
+  const lo = Math.floor(Math.min(tmin - 10, t1 ?? tmin)), hi = Math.ceil(Math.max(tmax + 10, t1 ?? tmax)), pos = v => ((v - lo) / (hi - lo) * 100) + "%";
+  $("mBand").style.left = pos(tmin); $("mBand").style.width = ((tmax - tmin) / (hi - lo) * 100) + "%";
+  $("mMark").style.left = t1 == null ? "-20%" : pos(t1); $("mMin").textContent = f(lo, 0) + " °C"; $("mMax").textContent = f(hi, 0) + " °C";
+  $("mTxt").textContent = `faixa alvo ${f(tmin, 0)}–${f(tmax, 0)} °C`;
+  $("tDigTag").innerHTML = t1 == null ? tag("t-muted", "off", "sem leitura") : (t1 >= tmin && t1 <= tmax) ? tag("t-ok", "ok", "na faixa") : tag("t-warn", "warn", "fora da faixa");
+  const t1h = valueAt(all, "t1", Date.now() - 3600e3);
+  $("kT1d").textContent = (t1 != null && t1h != null) ? `${t1 - t1h >= 0 ? "▲" : "▼"} ${f(Math.abs(t1 - t1h))} °C` : "";
+  $("kT1m").textContent = (t1 != null && t1h != null) ? "em relação a 1 h atrás" : (lt.taxa_t != null ? `tendência ${f(lt.taxa_t)} °C/h` : "");
+
+  // ---- Estratificação
+  const dt = lt.dt_estrat ?? ((lastOf("t1") != null && lastOf("t2") != null) ? lastOf("t1") - lastOf("t2") : null);
+  $("kDT").innerHTML = dt == null ? "—" : `${f(dt)}<small>°C</small>`;
+  $("dtTag").innerHTML = dt == null ? "" : Math.abs(dt) > LIMITES.dt ? tag("t-warn", "warn", "estratificado") : tag("t-ok", "ok", "homogêneo");
+  sparkline($("spDT"), rows.map(r => ({ x: r.x, y: (r.t1 != null && r.t2 != null) ? r.t1 - r.t2 : null })), css("--s1"));
+
+  // ---- Ambiente
+  const ta = lt.t_amb ?? lastOf("ta"), ur = lt.ur_amb ?? lastOf("ur");
+  $("kTA").innerHTML = ta == null ? "—" : `${f(ta)}<small>°C</small>`;
+  $("kTAm").textContent = ur == null ? "umidade sem leitura" : `umidade relativa ${f(ur, 0)} %`;
+  sparkline($("spTA"), series(rows, "ta"), css("--ctx"));
+
+  // ---- Biogás
+  if (has(rows, "vol")) {
+    const prod = prodS.reduce((s, p) => s + p.y, 0);
+    $("kV").innerHTML = `${f(prod, prod < 10 ? 2 : 1)}<small>NL</small>`;
+    $("kVm").textContent = `média ${f(prod / (span / 3600e3), 2)} NL/h${lt.vazao_nlh != null ? ` · agora ${f(lt.vazao_nlh, 2)} NL/h` : ""}`;
+  } else { $("kV").textContent = "—"; $("kVm").textContent = "medição de volume não instalada"; }
+  sparkline($("spV"), series(rows, "vol"), css("--s1"));
+
+  // ---- Gás
+  const g2 = lt.gas_ok === false ? null : (lt.mq2?.rel ?? lastOf("g2"));
+  $("kG").innerHTML = g2 == null ? (lt.gas_ok === false ? `<span style="font-size:18px;color:var(--ink-2)">aquecendo…</span>` : "—") : f(g2, 2);
+  $("gasTag").innerHTML = g2 == null ? "" : g2 < LIMITES.gas ? tag("t-crit", "crit", "vazamento") : tag("t-ok", "ok", "ar limpo");
+  sparkline($("spG"), series(rows, "g2"), css("--s1"));
+
+  renderStats(rows);
+}
+
+function renderStats(rows) {
+  const [tmin, tmax] = lim();
+  const V = [["Temperatura sonda 1", "t1", "°C", 1, v => v < tmin || v > tmax], ["Temperatura sonda 2", "t2", "°C", 1, null],
+             ["ΔT (estratificação)", "dt", "°C", 2, v => Math.abs(v) > LIMITES.dt], ["Temperatura ambiente", "ta", "°C", 1, null],
+             ["Umidade relativa", "ur", "%", 0, v => v > LIMITES.ur], ["MQ-2 (Rs/R0)", "g2", "", 2, v => v < LIMITES.gas],
+             ["MQ-7 (Rs/R0)", "g7", "", 2, v => v < LIMITES.gas], ["Pressão", "p", "Pa", 0, v => v > LIMITES.pMax]];
+  const rr = rows.map(r => ({ ...r, dt: (r.t1 != null && r.t2 != null) ? r.t1 - r.t2 : null }));
+  const tb = $("stats").tBodies[0]; tb.innerHTML = "";
+  for (const [n, k, u, d, out] of V) {
+    const vs = rr.filter(r => r[k] != null).map(r => r[k]); const tr = document.createElement("tr");
+    if (!vs.length) { tr.innerHTML = `<td>${n}</td><td colspan="6" style="text-align:left;color:var(--muted)">sem dados no período</td>`; tb.appendChild(tr); continue; }
+    const mean = vs.reduce((a, b) => a + b, 0) / vs.length, o = out ? vs.filter(out).length : null;
+    tr.innerHTML = `<td>${n}</td><td>${f(Math.min(...vs), d)}</td><td>${f(mean, d)}</td><td>${f(Math.max(...vs), d)}</td><td><b>${f(vs.at(-1), d)}</b> ${u}</td><td>${vs.length}</td>
+      <td>${o == null ? "—" : o ? tag("t-warn", "warn", f(o / vs.length * 100, 0) + " % do tempo") : tag("t-ok", "", "0 %")}</td>`;
+    tb.appendChild(tr);
+  }
+  const simN = rows.filter(r => r.sim).length;
+  $("stInfo").textContent = rows.length ? `${rows.length} amostras${simN ? ` · ${f(simN / rows.length * 100, 0)} % simuladas` : ""}` : "";
+}
+
+// ---------------------------------------------------------------- Componentes, banner e cabeçalho
+const devOnline = () => devStatus !== "offline" && lastMsg && Date.now() - lastMsg < 95e3;
+const fmtAgo = t => { const s = Math.round((Date.now() - t) / 1000); return s < 60 ? `há ${s} s` : s < 3600 ? `há ${Math.round(s / 60)} min` : `há ${f(s / 3600, 1)} h`; };
+const fmtDur = s => { if (s == null) return "?"; const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return h ? `${h} h ${m} min` : `${m} min`; };
+const signal = rssi => { const n = rssi >= -60 ? 4 : rssi >= -70 ? 3 : rssi >= -80 ? 2 : 1; return `<span class="bars" aria-hidden="true">${[4, 7, 10, 12].map((h, i) => `<i class="${i < n ? "on" : ""}" style="height:${h}px"></i>`).join("")}</span>`; };
+
+function renderComps() {
+  const j = last || {}, on = devOnline(), al = new Set(j.alarmes || []), OFF = ["off", "sem dados", "—"];
+  const mq = (o, sAl, sFail) => !on ? OFF : j.gas_ok === false ? ["wait", "aquecendo", "pré-aquecimento (3 min)"]
+    : (!o || o.rs == null || al.has(sFail)) ? ["crit", "falha", "sem leitura"] : o.rel == null ? ["warn", "não calibrado", `Rs ${f(o.rs / 1000)} kΩ`]
+    : (o.rel < LIMITES.gas || al.has(sAl)) ? ["crit", "alarme", `Rs/R0 ${f(o.rel, 2)}`] : ["ok", "ok", `Rs/R0 ${f(o.rel, 2)}`];
+  const temp = (v, s) => !on ? OFF : (v == null || al.has(s)) ? ["crit", "falha", "sem leitura"] : ["ok", "ok", `${f(v)} °C`];
+  const C = [
+    ["chip", "ESP32", on ? ["ok", "online", `fw ${j.fw || "?"} · ativo há ${fmtDur(j.up)}`] : ["crit", "offline", lastMsg ? `último dado ${fmtAgo(lastMsg)}` : "aguardando"]],
+    ["wifi", "WiFi", !on ? OFF : [j.rssi >= -80 ? "ok" : "warn", j.rssi >= -60 ? "excelente" : j.rssi >= -70 ? "bom" : j.rssi >= -80 ? "fraco" : "crítico", `${j.rssi} dBm`, signal(j.rssi)]],
+    ["therm", "Sonda 1", temp(j.t_dig, "SENSOR_T_DIG1"), "DS18B20 · "],
+    ["therm", "Sonda 2", temp(j.t_dig2, "SENSOR_T_DIG2"), "DS18B20 · "],
+    ["drop", "Ambiente", !on ? OFF : j.t_amb == null ? ["crit", "falha", "sem leitura"] : ["ok", "ok", `DHT11 · ${f(j.t_amb)} °C · ${f(j.ur_amb, 0)} %`]],
+    ["gas", "MQ-2", mq(j.mq2, "GAS_COMBUSTIVEL", "SENSOR_MQ2")],
+    ["gas", "MQ-7", mq(j.mq7, "MQ7_ALTERADO", "SENSOR_MQ7")],
+    ["gauge", "Pressão", !on ? OFF : !("p_pa" in j) ? ["off", "não instalado", "módulo a comprar"] : j.p_pa == null ? ["crit", "falha", "sem leitura"]
+      : j.p_pa > LIMITES.pMax ? ["crit", "sobrepressão", `${f(j.p_pa, 0)} Pa`] : ["ok", "ok", `${f(j.p_pa, 0)} Pa · ${f(j.p_pa / 98.07)} cmH₂O`]]
+  ];
+  if ("valv" in j) C.push(["valve", "Válvula", !on ? OFF : [j.valv ? "warn" : "ok", j.valv ? "aberta" : "fechada", `${j.ciclos ?? 0} ciclos`]]);
+  if ("rele" in j) C.push(["relay", "Relé (alarme)", !on ? OFF : j.rele ? ["crit", "ACIONADO", "sirene/luz ligada"] : ["ok", "em espera", "desligado"]]);
+  C.push(["bell", "Alarme sonoro", !on ? OFF : j.mudo ? ["warn", "silenciado", "por até 30 min"] : ["ok", "ativo", "buzzer habilitado"]]);
+  C.push(["box", "Fila offline", !on ? OFF : j.fila > 0 ? ["warn", "reenviando", `${Math.round(j.fila / 1024)} kB pendentes`] : ["ok", "vazia", "tudo enviado"]]);
+  $("comps").innerHTML = C.map(([ic, n, [s, lbl, det, extra], pre]) => `<div class="card comp" style="box-shadow:inset 3px 0 0 ${ST[s][2]}">
+    <div class="ci" style="color:var(--ink-2)">${CI[ic]}</div><div class="cn"><span>${esc(n)}</span>${stBadge(s, lbl)}</div>
+    <div class="cv">${esc((pre && s === "ok" ? pre : "") + det)}${extra || ""}</div></div>`).join("");
+  const nOk = C.filter(c => c[2][0] === "ok").length, nCrit = C.filter(c => c[2][0] === "crit").length;
+  $("compInfo").textContent = `${nOk} de ${C.length} em operação normal${nCrit ? ` · ${nCrit} com falha ou alarme` : ""}`;
+}
+
+function renderBanner() {
+  const b = $("banner"), j = last || {};
+  if (!devOnline()) {
+    b.className = lastMsg ? "b-crit" : "b-serious";
+    b.innerHTML = `<span class="ic" style="color:${lastMsg ? "var(--crit)" : "var(--ink-2)"}">${lastMsg ? IC.crit : IC.wait}</span><div><h3>${lastMsg ? "Dispositivo offline" : "Aguardando o dispositivo"}</h3><ul><li>${lastMsg ? `Último dado recebido ${fmtAgo(lastMsg)}. Verifique energia e WiFi do ESP32.` : "Nenhum dado ainda — o ESP32 publica a cada 30 s."}</li></ul></div>`;
+    return;
+  }
+  const now = Date.now(), act = (j.alarmes || []).map(a => [a, ...(AL[a] || ["warn", a])]);
+  for (const [a] of act) if (!alSince.has(a)) alSince.set(a, now);
+  for (const a of [...alSince.keys()]) if (!act.some(x => x[0] === a)) alSince.delete(a);
+  const by = s => act.filter(x => x[1] === s), crit = by("crit"), warn = by("warn"), ser = by("serious"), info = by("info");
+  const li = arr => arr.map(([a, , t]) => `<li>${esc(t)} <span style="color:var(--muted)">· desde ${new Date(alSince.get(a)).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span></li>`).join("");
+  const big = p => p.replace('width="13" height="13"', 'width="22" height="22"');
+  if (crit.length) {
+    b.className = "b-crit pulse";
+    b.innerHTML = `<span class="ic" style="color:var(--crit)">${big(IC.warn)}</span><div><h3>Alarme de segurança ativo${j.rele ? " · alarme local acionado" : ""}</h3><ul>${li(crit)}${li(warn)}${li(ser)}</ul></div>
+      <div class="acts"><button class="btn" data-cmd="silenciar">${j.mudo ? "Silenciado" : "Silenciar 30 min"}</button></div>`;
+  } else if (warn.length) {
+    b.className = "b-warn"; b.innerHTML = `<span class="ic">${big(IC.warn)}</span><div><h3>Atenção ao processo</h3><ul>${li(warn)}${li(ser)}</ul></div>`;
+  } else if (ser.length) {
+    b.className = "b-serious"; b.innerHTML = `<span class="ic">${big(IC.wait)}</span><div><h3>Manutenção necessária</h3><ul>${li(ser)}${li(info)}</ul></div>`;
+  } else {
+    b.className = "b-ok"; b.innerHTML = `<span class="ic" style="color:var(--good-text)">${big(IC.ok)}</span><div><h3>Operação normal</h3><ul><li>Nenhum alarme ativo${info.length ? " · " + esc(info[0][2]) : ""}</li></ul></div>`;
+  }
+  bindCmds(b);
+}
+function renderHeader() {
+  const j = last || {}, on = devOnline();
+  $("dDev").style.background = on ? css("--good") : lastMsg ? css("--crit") : css("--muted");
+  $("sDev").innerHTML = on ? `<b>online</b> · atualizado ${fmtAgo(lastMsg)}` : lastMsg ? `<b>offline</b>` : "aguardando";
+  $("pSim").classList.toggle("hid", !j.sim);
+  $("devinfo").textContent = j.id ? `${j.id} · firmware ${j.fw || "?"}${j.sim ? " · modo simulação" : ""}` : "aguardando o primeiro dado…";
+}
+const refreshStatus = () => { renderHeader(); renderBanner(); renderComps(); };
+setInterval(() => { refreshStatus(); if (range.mode === "1") render(); }, 5000);
+
+// ---------------------------------------------------------------- Mensagens MQTT
+function onTelem(j) {
+  addRec(recFromTelem(j));
+  if (!last || (j.ts || 0) >= (last.ts || 0)) { last = j; if (!j.ts || Date.now() - j.ts * 1000 < 120e3) lastMsg = Date.now(); }
+  refreshStatus(); render();
+}
+function onHistorico(h) {
+  if (!h.total) { $("chInfo").textContent = "histórico vazio — o ESP32 acumula um ponto a cada 5 min"; return; }
+  const i = Object.fromEntries(h.c.map((k, n) => [k, n]));
+  for (const d of h.d) addRec({ x: d[i.ts] * 1000, t1: d[i.t_dig], t2: d[i.t_dig2], ta: d[i.t_amb], ur: d[i.ur_amb], g2: d[i.mq2_rel], g7: d[i.mq7_rel],
+                                p: d[i.p_pa], vol: d[i.vol_nl], nal: d[i.n_alarmes], sim: !!d[i.sim], src: "hist" });
+  histPts += h.d.length;
+  $("chInfo").textContent = h.parte < h.total ? `carregando histórico ${h.parte}/${h.total}…` : `histórico: ${histPts} médias de 5 min (${f(histPts * h.int / 3600, 1)} h) + leituras ao vivo`;
+  render();
+}
+function log(t) { const p = $("log"); p.textContent = `[${new Date().toLocaleTimeString("pt-BR")}] ${t}\n` + p.textContent; }
+
+// ---------------------------------------------------------------- Diário
+const TIPOS = { alimentacao: ["Massa (kg)", "kg"], ph: ["pH", ""], co2: ["", "% CH₄"], queima: ["", ""], retirada: ["Volume (L)", "L"], vhead: ["Volume de headspace (L)", "L"], obs: ["", ""] };
+const ROT = { alimentacao: "Alimentação", ph: "pH", co2: "Teste CO₂", queima: "Queima", retirada: "Retirada", vhead: "V headspace", obs: "Observação" };
+const show = (id, on = true) => $(id).classList.toggle("hid", !on);
+function atualizaForm() { const t = $("dTipo").value; show("dVal", !!TIPOS[t][0]); $("dValLbl").textContent = TIPOS[t][0]; show("dCo2", t === "co2"); show("dChama", t === "queima"); calcCo2(); }
+function calcCo2() {
+  if ($("dTipo").value !== "co2") { $("dCalc").innerHTML = "&nbsp;"; return; }
+  const vi = num($("dVi").value), vf = num($("dVf").value);
+  $("dCalc").textContent = (vi > 0 && vf >= 0 && vf <= vi) ? `CO₂ ≈ ${f((vi - vf) / vi * 100)} % · CH₄ ≈ ${f(vf / vi * 100)} % (resíduo não absorvido)` : "Informe Vi (amostra) e Vf (após contato com NaOH).";
+}
+$("dTipo").onchange = atualizaForm; $("dVi").oninput = $("dVf").oninput = calcCo2; atualizaForm();
+function addDiario(e) {
+  const k = e.ts + e.tipo + e.valor; if (diario.some(d => d._k === k)) return; e._k = k; diario.unshift(e);
+  const tb = $("dLista"); tb.innerHTML = "";
+  for (const d of diario.slice(0, 12)) {
+    const tr = document.createElement("tr");
+    for (const [txt, al] of [[new Date(d.ts * 1000).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })], [ROT[d.tipo] || d.tipo, "left"], [`${d.valor ?? ""} ${d.unid ?? ""}`], [`${d.obs || ""}${d.autor ? " — " + d.autor : ""}`, "left"]]) {
+      const td = document.createElement("td"); td.textContent = txt; if (al) td.style.textAlign = al; tr.appendChild(td); }
+    tb.appendChild(tr);
+  }
+}
+$("bDiario").onclick = () => {
+  if (!client || !client.connected) return log("não conectado");
+  const t = $("dTipo").value, e = { ts: Math.floor(Date.now() / 1000), tipo: t, autor: $("dAutor").value.trim(), obs: $("dObs").value.trim(), unid: TIPOS[t][1] };
+  if (t === "co2") { const vi = num($("dVi").value), vf = num($("dVf").value); if (!(vi > 0 && vf >= 0 && vf <= vi)) return log("teste de CO₂: valores inválidos");
+                     e.vi_ml = vi; e.vf_ml = vf; e.co2_pct = +((vi - vf) / vi * 100).toFixed(1); e.valor = +(vf / vi * 100).toFixed(1); }
+  else if (t === "queima") e.valor = $("dChamaSel").value;
+  else if (TIPOS[t][0]) { e.valor = num($("dValor").value); if (Number.isNaN(e.valor)) return log("informe o valor"); }
+  client.publish(cfg.topic + "/diario", JSON.stringify(e), { qos: 1 });
+  if (t === "vhead") { if (cfg.tok) client.publish(cfg.topic + "/cmd", `vhead:${e.valor}:${cfg.tok}`); else log("V headspace não enviado ao ESP32: informe o token em Conexão"); }
+  cfg.autor = e.autor; saveCfg();
+  $("dValor").value = $("dObs").value = $("dVi").value = $("dVf").value = ""; calcCo2(); log("diário: " + ROT[t] + " registrado");
+};
+
+// ---------------------------------------------------------------- Comandos
+function pedirToken() {
+  const d = document.querySelector("details"); d.open = true; $("iTok").focus(); d.scrollIntoView({ behavior: "smooth", block: "center" });
+  log("Comandos exigem o token do dispositivo. Digite-o em Conexão e clique em Salvar (fica guardado só neste aparelho).");
+}
+function bindCmds(root = document) {
+  root.querySelectorAll("[data-cmd]").forEach(btn => btn.onclick = () => {
+    if (!client || !client.connected) return log("não conectado");
+    let c = btn.dataset.cmd;
+    if ("arg" in btn.dataset) { const a = $("iArg").value.trim().replace(",", "."); if (!a) return log("preencha o campo Valor"); c += ":" + a; }
+    if (!("open" in btn.dataset)) {
+      if (!cfg.tok) { pedirToken(); return; }
+      c += ":" + cfg.tok;
+    }
+    client.publish(cfg.topic + "/cmd", c); log("→ " + btn.dataset.cmd);
+  });
+}
+bindCmds();
+
+// ---------------------------------------------------------------- Filtro de período
+$("seg").querySelectorAll("button").forEach(btn => btn.onclick = () => {
+  $("seg").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(x === btn)));
+  range.mode = btn.dataset.h;
+  $("custom").classList.toggle("on", range.mode === "custom");
+  if (range.mode === "custom" && !$("dFrom").value) {
+    const iso = t => new Date(t - new Date().getTimezoneOffset() * 60e3).toISOString().slice(0, 16);
+    $("dFrom").value = iso(Date.now() - 12 * 3600e3); $("dTo").value = iso(Date.now());
+  }
+  render();
+});
+$("dFrom").onchange = $("dTo").onchange = render;
+
+// ---------------------------------------------------------------- CSV: exportar período / importar registrador
+$("bCsv").onclick = () => {
+  const rows = filtered(); if (!rows.length) return log("nada a exportar no período");
+  const cols = ["data_hora", "ts", "t_dig", "t_dig2", "t_amb", "ur_amb", "mq2_rel", "mq7_rel", "p_pa", "vol_nl", "n_alarmes", "sim", "origem"];
+  const lines = [cols.join(";")].concat(rows.map(r => [new Date(r.x).toLocaleString("pt-BR"), Math.round(r.x / 1000), r.t1, r.t2, r.ta, r.ur, r.g2, r.g7, r.p, r.vol, r.nal, r.sim ? 1 : 0, r.src]
+    .map(v => v == null ? "" : String(v).replace(".", ",")).join(";")));
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["﻿" + lines.join("\n")], { type: "text/csv" }));
+  a.download = `biodigestor_${new Date(curRange()[0]).toISOString().slice(0, 16).replace(":", "")}.csv`; a.click();
+};
+$("fCsv").onchange = async ev => {
+  let n = 0;
+  for (const file of ev.target.files) {
+    const txt = (await file.text()).replace(/^﻿/, ""), L = txt.split(/\r?\n/).filter(Boolean); if (L.length < 2) continue;
+    const sep = L[0].includes(";") ? ";" : ",", H = L[0].split(sep).map(s => s.trim()), ix = k => H.indexOf(k);
+    const g = (c, k) => { const i = ix(k); if (i < 0 || c[i] == null || c[i] === "") return null; const v = num(c[i]); return isNaN(v) ? null : v; };
+    for (const ln of L.slice(1)) {
+      const c = ln.split(sep); let ts = g(c, "ts");
+      if (ts == null && ix("ts_iso") >= 0) ts = Date.parse(c[ix("ts_iso")]) / 1000;
+      if (!ts) continue;
+      const nal = ix("alarmes") >= 0 ? (c[ix("alarmes")] || "").split("|").filter(a => a && a !== "MQ_NAO_CALIBRADO").length : g(c, "n_alarmes") || 0;
+      addRec({ x: ts * 1000, t1: g(c, "t_dig"), t2: g(c, "t_dig2"), ta: g(c, "t_amb"), ur: g(c, "ur_amb"), g2: g(c, "mq2_rel"), g7: g(c, "mq7_rel"),
+               p: g(c, "p_pa"), vol: g(c, "vol_nl") ?? g(c, "vol_l"), nal, sim: g(c, "sim") === 1, src: "csv" }); n++;
+    }
+  }
+  log(`CSV importado: ${n} linhas`); ev.target.value = "";
+  $("seg").querySelector('[data-h="all"]').click();
+};
+
+// ---------------------------------------------------------------- Conexão
+function pedirHistorico() { if (client?.connected) { histPts = 0; client.publish(cfg.topic + "/cmd", "historico:48"); } }
+function conectar() {
+  if (client) client.end(true);
+  $("sBroker").textContent = "conectando…"; $("dBroker").style.background = css("--warn");
+  client = mqtt.connect(cfg.url, { username: cfg.user || undefined, password: cfg.pass || undefined, clientId: "painel-" + Math.random().toString(16).slice(2, 10), reconnectPeriod: 4000 });
+  client.on("connect", () => { $("sBroker").innerHTML = "<b>servidor</b> conectado"; $("dBroker").style.background = css("--good");
+    client.subscribe(cfg.topic + "/#", () => pedirHistorico()); log("conectado a " + cfg.url); });
+  client.on("reconnect", () => { $("sBroker").textContent = "reconectando…"; $("dBroker").style.background = css("--warn"); });
+  client.on("error", e => { log("erro: " + e.message); $("dBroker").style.background = css("--crit"); });
+  client.on("close", () => { $("sBroker").textContent = "servidor desconectado"; $("dBroker").style.background = css("--crit"); });
+  client.on("message", (t, m) => {
+    const s = m.toString(), sub = t.slice(cfg.topic.length + 1);
+    try {
+      if (sub === "telemetria") onTelem(JSON.parse(s));
+      else if (sub === "historico") onHistorico(JSON.parse(s));
+      else if (sub === "status") { devStatus = s; refreshStatus(); }
+      else if (sub === "evento") log(s);
+      else if (sub === "diario") addDiario(JSON.parse(s));
+    } catch (e) { log("mensagem inválida em " + sub); }
+  });
+}
+$("bConn").onclick = () => {
+  cfg = { ...cfg, url: $("iUrl").value.trim() || DEF.url, topic: $("iTopic").value.trim().replace(/\/$/, "") || DEF.topic,
+          user: $("iUser").value, pass: $("iPass").value, tok: $("iTok").value.trim(), lim: $("iLim").value || DEF.lim };
+  saveCfg(); store.clear(); last = null; lastMsg = 0; conectar(); render();
+};
+
+if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+buildCharts();
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { buildCharts(); render(); refreshStatus(); });
+refreshStatus(); render();
+conectar();
+</script>
+</body>
+</html>
