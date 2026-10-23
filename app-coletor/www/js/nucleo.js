@@ -334,9 +334,15 @@ export async function coletar(ctx) {
 
   // 2) dados em lotes
   let desde = estado.esp[serie].ultimo_n || 0;
+  if (Number(info.n_ultimo || 0) < desde) {
+    const m = `O ESP informa n até ${info.n_ultimo}, menor que o já coletado (${desde}). Recomeçando a contagem desta série.`;
+    res.avisos.push(m); log(m, 'aviso');
+    desde = 0;
+  }
   if (info.n_primeiro > desde + 1) {
     const m = `Linhas n ${desde + 1}–${info.n_primeiro - 1} não existem mais no cartão (apagadas ou perdidas).`;
     res.avisos.push(m); log(m, 'aviso');
+    desde = Number(info.n_primeiro) - 1;   // pula direto para o que existe
   }
   const totalEsperado = Math.max(0, Number(info.n_ultimo || 0) - desde);
   if (totalEsperado === 0) log('Nenhuma linha nova no ESP.');
@@ -349,8 +355,9 @@ export async function coletar(ctx) {
     const { linhas } = lerCsv(r.texto);
     const validas = linhas.filter((l) => /^\d+$/.test(String(l.n)) && Number(l.n) > desde);
     const ultimoCab = parseInt(r.cabecalhos['x-ultimo-n'], 10);
-    const ultimo = validas.length ? Math.max(Number(validas[validas.length - 1].n), Number.isFinite(ultimoCab) ? ultimoCab : 0) : desde;
-    mais = r.cabecalhos['x-mais'] === '1' && validas.length > 0 && ultimo > desde;
+    // X-Ultimo-N = maior n coberto pela janela (pode vir sem linhas, se houver buraco no cartão)
+    const ultimo = Math.max(desde, validas.length ? Number(validas[validas.length - 1].n) : 0, Number.isFinite(ultimoCab) ? ultimoCab : 0);
+    mais = r.cabecalhos['x-mais'] === '1' && ultimo > desde;
     if (validas.length) {
       const nuvem = validas.map((l) => linhaParaNuvem(l, serie));
       res.linhasNovas += await gravarLocal(ctx.armazem, estado, nuvem);
@@ -362,6 +369,10 @@ export async function coletar(ctx) {
       baixadas += validas.length;
       progresso({ etapa: 'dados', feito: baixadas, total: Math.max(totalEsperado, baixadas) });
       log(`Lote recebido: n ${validas[0].n}–${ultimo} (${validas.length} linhas).`);
+    } else if (ultimo > desde) {
+      estado.esp[serie].ultimo_n = ultimo;
+      await salvarEstado(ctx.armazem, estado);
+      log(`Janela n ${desde + 1}–${ultimo} vazia no cartão (buraco); seguindo.`, 'aviso');
     }
     desde = ultimo;
   }
@@ -371,7 +382,11 @@ export async function coletar(ctx) {
   for (let volta = 0; volta < 100; volta++) {
     const r = await pedirEsp(ctx, 'GET', `/api/eventos?desde=${desdeEv}&max=${lote}`);
     const evs = lerCsv(r.texto).linhas.filter((e) => /^\d+$/.test(String(e.n)) && Number(e.n) > desdeEv);
-    if (!evs.length) break;
+    const ultEvCab = parseInt(r.cabecalhos['x-ultimo-n'], 10);
+    if (!evs.length) {
+      if (r.cabecalhos['x-mais'] === '1' && Number.isFinite(ultEvCab) && ultEvCab > desdeEv) { desdeEv = ultEvCab; continue; }
+      break;
+    }
     const nuvem = evs.map((e) => ({ ts: e.ts ?? '', serie, n: e.n, tipo: e.tipo ?? '', detalhe: e.detalhe ?? '' }));
     await gravarLocal(ctx.armazem, estado, [], nuvem);
     desdeEv = Math.max(...evs.map((e) => Number(e.n)));

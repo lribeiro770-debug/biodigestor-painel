@@ -276,3 +276,16 @@ test('Integração: github_falso.py (127.0.0.1:8089), se estiver no ar', async (
     assert.equal(linhasPendentes(await carregarEstado(arm)), 0);
   } finally { await esp.fechar(); }
 });
+
+test('Integração: buraco no cartão não trava a coleta (ESP_BURACO_URL, simulado com --buraco)', async (t) => {
+  const url = process.env.ESP_BURACO_URL || 'http://127.0.0.1:8090';
+  if (!(await noAr(url + '/api/info'))) return t.skip('ESP simulado com buraco fora do ar');
+  const arm = new ArmazemMemoria();
+  const c = { ...ctx({ espUrl: url, espToken: 'teste123', lote: 5000 }, arm), agora: () => Math.floor(Date.now() / 1000) };
+  const r = await coletar(c);
+  const info = await (await fetch(url + '/api/info')).json();
+  assert.equal(r.ateN, info.n_ultimo, 'chegou ao fim apesar da janela vazia');
+  const linhas = await linhasLocais(arm);
+  assert.ok(linhas.every((l) => Number(l.n) < 1200 || Number(l.n) > 7300));
+  assert.ok(linhas.some((l) => Number(l.n) > 7300));
+});

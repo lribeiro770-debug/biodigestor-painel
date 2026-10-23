@@ -1,6 +1,6 @@
 {
   "name": "biodigestor-coletor",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Coletor do Biodigestor — app Android (Capacitor) que baixa os dados do ESP32 pelo Wi-Fi local e envia ao GitHub",
   "private": true,
   "type": "module",
