@@ -1,16 +1,16 @@
-# Primeiro teste na bancada — coleta offline (firmware 3.0)
+# Primeiro teste na bancada — coleta offline (firmware 3.0.1)
 
 Faça este roteiro **antes** de levar o sistema ao biodigestor. Leva uns 30 minutos.
 
 ## 0. O que você precisa
-- ESP32 com o firmware 3.0 gravado (`biodigestor_v3.0.0_ota.bin` ou o `_completo_0x0.bin`)
+- ESP32 com o firmware 3.0.1 gravado (`biodigestor_v3.0.1_ota.bin` ou o `_completo_0x0.bin`)
 - Módulo microSD ligado ao J15 por 6 jumpers (siga os **nomes** impressos no módulo) e o cartão inserido
 - Celular Android com o app Coletor instalado (APK do GitHub Releases) **ou** notebook com o ColetorBiodigestor.exe
 - O token de comando do ESP (o mesmo do painel) e um token do GitHub (ver passo 6)
 
 ## 1. Gravar o firmware
-- **Por cima do atual, mantendo configurações:** grave `biodigestor_v3.0.0_ota.bin` em **0x10000** (Flash Download Tool, como antes).
-- **Placa nova ou do zero:** grave `biodigestor_v3.0.0_completo_0x0.bin` em **0x0**.
+- **Por cima do atual, mantendo configurações:** grave `biodigestor_v3.0.1_ota.bin` em **0x10000** (Flash Download Tool, como antes).
+- **Placa nova ou do zero:** grave `biodigestor_v3.0.1_completo_0x0.bin` em **0x0**.
 - Depois aperte **EN**. No monitor serial (115200) devem aparecer:
   - `[SD] microSD ok · série xxxxxxxx · amostras …` (se aparecer "cartão não encontrado", confira os jumpers e o cartão em FAT32)
   - `[AP] "Biodigestor-XXXX" ativo em http://192.168.4.1`
@@ -37,6 +37,10 @@ Faça este roteiro **antes** de levar o sistema ao biodigestor. Leva uns 30 minu
 2. Espere 3 minutos e colete de novo. As linhas novas chegam sem hora até a coleta acertar o relógio; depois disso, vêm com hora.
 3. Linhas de um período em que **ninguém acertou a hora antes de outra queda** ficam em `sem_hora.csv` (limitação conhecida, sem relógio DS3231).
 
+## 5b. Testes de robustez (5 minutos, valem a pena)
+1. **Coletor some no meio:** deixe acumular algumas centenas de linhas (ou use `simular:1` por um tempo), comece a coleta e **desligue o Wi-Fi do celular no meio**. No serial deve aparecer `[WEB] coletor desconectou no meio do envio — abortado` e o ESP **não pode reiniciar**. Colete de novo: continua de onde parou, sem buraco.
+2. **Cartão arrancado:** com o ESP ligado, tire o microSD por 2 minutos e recoloque. Em até 1 minuto o serial mostra o cartão de volta, e aparece um evento `sd_erro` explicando a falha. As amostras daquele intervalo ficam perdidas (esperado).
+
 ## 6. Enviar para a nuvem
 1. Crie o token do GitHub **na conta lribeiro770-debug**: Settings → Developer settings → Personal access tokens → **Fine-grained tokens** → Generate new token → Repository access: **Only select repositories → biodigestor-painel** → Permissions → **Contents: Read and write** → Generate. Copie o token (ele só aparece uma vez).
 2. Cole o token nas Configurações do app (fica salvo só naquele aparelho).
@@ -46,9 +50,11 @@ Faça este roteiro **antes** de levar o sistema ao biodigestor. Leva uns 30 minu
 ## 7. Se algo der errado
 | Sintoma | O que fazer |
 |---|---|
-| "cartão não encontrado" no serial | Confira os 6 jumpers pelos nomes; cartão formatado em FAT32; 5V no VCC do módulo |
+| "cartão não encontrado" no serial | Confira os 6 jumpers pelos nomes; cartão formatado em FAT32 (até 32 GB); 5V no VCC do módulo. Se ainda falhar, solde um resistor de 10 kΩ entre o fio MISO e o 3V3 (o GPIO34 não tem pull-up interno) |
 | Celular não abre 192.168.4.1 | Mantenha a rede sem internet; o app usa "vincular ao Wi-Fi", mas no navegador desligue os dados móveis |
 | App diz "token" | O token de comando do ESP está diferente do digitado no app |
 | Envio diz 403/404 | O token do GitHub não tem acesso ao repositório biodigestor-painel ou falta "Contents: Read and write" |
 | Página local abre mas "Amostras" não sobe | Veja no serial se há "[SD] falha ao gravar"; reinsira o cartão (o ESP tenta de novo a cada minuto) |
+| ESP sem internet com o celular conectado no AP | Normal: com alguém no AP ele só tenta a rede de casa a cada 30 min e quando não há coleta rodando (para não derrubar o coletor) |
+| Atualizar pelo Wi-Fi (OTA) | O ESP agora aparece na IDE como **biodigestor.local** (senha = token) |
 | Portal de Wi-Fi | Segure o botão BOOT por 3 s (ou use o botão na página local). Enquanto o portal estiver aberto, a coleta pausa |
