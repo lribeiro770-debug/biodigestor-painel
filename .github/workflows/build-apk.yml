@@ -1,0 +1,108 @@
+# Gera o APK do Coletor do Biodigestor (app em app-coletor/) e publica como artefato e Release.
+# Copiar para .github/workflows/build-apk.yml no repositório biodigestor-painel.
+name: APK do Coletor
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app-coletor/**'
+      - '.github/workflows/build-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk-coletor
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app-coletor
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app-coletor/package-lock.json
+
+      - name: JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+          cache-dependency-path: |
+            app-coletor/android/*.gradle*
+            app-coletor/android/**/gradle-wrapper.properties
+
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Dependências (npm ci)
+        run: npm ci
+
+      - name: Testes do núcleo
+        run: npm test
+
+      - name: Copiar web para o projeto Android (cap sync)
+        run: |
+          npm run vendor
+          npx cap sync android
+
+      - name: Chave de assinatura fixa (opcional)
+        # Com o segredo COLETOR_DEBUG_KEYSTORE_B64 todas as versões saem com a mesma assinatura e o
+        # celular aceita atualizar por cima sem desinstalar (e sem perder os dados locais).
+        env:
+          KEYSTORE_B64: ${{ secrets.COLETOR_DEBUG_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            mkdir -p "$HOME/.android"
+            echo "$KEYSTORE_B64" | base64 -d > "$HOME/.android/debug.keystore"
+            echo "Usando keystore de depuração fixa."
+          else
+            echo "::warning::Segredo COLETOR_DEBUG_KEYSTORE_B64 ausente: APK assinado com chave temporária (atualizar exigirá desinstalar)."
+          fi
+
+      - name: Compilar APK (debug)
+        working-directory: app-coletor/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Versão
+        id: versao
+        run: |
+          V=$(node -p "require('./package.json').version")
+          echo "versao=$V" >> "$GITHUB_OUTPUT"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "coletor-biodigestor-v$V.apk"
+
+      - name: Artefato do workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: coletor-biodigestor-v${{ steps.versao.outputs.versao }}
+          path: app-coletor/coletor-biodigestor-v${{ steps.versao.outputs.versao }}.apk
+          if-no-files-found: error
+
+      - name: Release coletor-v${{ steps.versao.outputs.versao }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: coletor-v${{ steps.versao.outputs.versao }}
+          name: Coletor do Biodigestor v${{ steps.versao.outputs.versao }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          files: app-coletor/coletor-biodigestor-v${{ steps.versao.outputs.versao }}.apk
+          body: |
+            APK do app Android **Coletor do Biodigestor** (v${{ steps.versao.outputs.versao }}, commit ${{ github.sha }}).
+
+            **Instalar:** abra esta página no celular, toque em `coletor-biodigestor-v${{ steps.versao.outputs.versao }}.apk`,
+            permita "instalar apps desconhecidos" para o navegador quando o Android pedir e confirme.
+            Instruções completas em `app-coletor/README.md`.

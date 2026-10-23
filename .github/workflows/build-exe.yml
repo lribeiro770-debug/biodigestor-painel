@@ -1,0 +1,53 @@
+# Gera o ColetorBiodigestor.exe (app em coletor-desktop/) num Windows da nuvem e publica como Release.
+name: EXE do Coletor (Windows)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'coletor-desktop/**'
+      - '.github/workflows/build-exe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  exe:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: coletor-desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: PyInstaller
+        run: python -m pip install --upgrade pip pyinstaller
+      - name: Compilar o .exe
+        shell: pwsh
+        run: |
+          $icone = @()
+          if (Test-Path icone.ico) { $icone = @('--icon', 'icone.ico', '--add-data', 'icone.ico;.') }
+          pyinstaller --noconfirm --onefile --windowed --name ColetorBiodigestor @icone coletor.py
+      - name: Teste rápido
+        run: python coletor.py --help
+      - name: Versão
+        id: v
+        shell: pwsh
+        run: |
+          $v = (Select-String -Path coletor_core.py -Pattern '^VERSAO\s*=\s*"([^"]+)"').Matches.Groups[1].Value
+          if (-not $v) { $v = "1.0.0" }
+          "versao=$v" >> $env:GITHUB_OUTPUT
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ColetorBiodigestor-windows
+          path: coletor-desktop/dist/ColetorBiodigestor.exe
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: coletor-desktop-v${{ steps.v.outputs.versao }}
+          name: Coletor do Biodigestor (Windows) v${{ steps.v.outputs.versao }}
+          files: coletor-desktop/dist/ColetorBiodigestor.exe
+          body: Baixe o ColetorBiodigestor.exe e execute. Instruções em coletor-desktop/README.md.
+          make_latest: false

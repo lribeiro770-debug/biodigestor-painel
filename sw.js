@@ -1,6 +1,6 @@
 // Service worker mínimo: permite instalar como app e abrir a "casca" do painel sem rede.
 // Os dados sempre vêm ao vivo do servidor MQTT (não são guardados aqui).
-const CACHE = "biodigestor-v1";
+const CACHE = "biodigestor-v2";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png",
   "https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js",
   "https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.js",

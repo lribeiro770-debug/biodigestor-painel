@@ -1,0 +1,13 @@
+{
+  "appId": "br.edu.utfpr.biodigestor.coletor",
+  "appName": "Coletor do Biodigestor",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
+}

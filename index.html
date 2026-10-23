@@ -211,7 +211,7 @@ pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; color: var
 
   <div class="kpis">
     <div class="card kpi hero">
-      <div class="lbl"><span>Temperatura do digestato</span><span id="tDigTag"></span></div>
+      <div class="lbl"><span>Temperatura do digestato (média das 2 sondas)</span><span id="tDigTag"></span></div>
       <div class="val" id="kT1">—</div>
       <div class="meter" aria-hidden="true"><div class="band" id="mBand"></div><div class="mark" id="mMark"></div></div>
       <div class="meter-l"><span id="mMin"></span><span id="mTxt">faixa alvo</span><span id="mMax"></span></div>
@@ -397,13 +397,15 @@ const AL = {
 const alSince = new Map();
 
 // ---------------------------------------------------------------- Estado
-// Registro: { x(ms), t1, t2, ta, ur, g2, g7, p, vol, nal, sim, src: "live" | "hist" | "csv" }
+// Registro: { x(ms), t1, t2, ta, ur, g2, g7, p, vol, nal, sim, src: "live" | "hist" | "csv" | "nuvem" }
 const store = new Map();
 let last = null, lastMsg = 0, devStatus = "", client = null, histPts = 0;
 const diario = [];
 const range = { mode: "24" };
 
 function addRec(r) {
+  const ok = v => v != null && !Number.isNaN(v);
+  r.tm = ok(r.t1) && ok(r.t2) ? (r.t1 + r.t2) / 2 : ok(r.t1) ? r.t1 : ok(r.t2) ? r.t2 : null;   // média das 2 sondas
   const k = Math.round(r.x / 1000), cur = store.get(k);
   if (cur && cur.src === "live" && r.src !== "live") return;   // leitura ao vivo prevalece sobre média
   store.set(k, r);
@@ -540,14 +542,14 @@ function doRender() {
   $("lgG").innerHTML = [["MQ-2", "--s1", "g2"], ["MQ-7", "--s2", "g7"]].map(([n, c, k]) => `<span><i style="background:var(${c})"></i>${n} <b>${f(lastOf(k), 2)}</b></span>`).join("");
 
   // ---- KPI principal: temperatura do digestato + faixa alvo
-  const t1 = lt.t_dig ?? lastOf("t1");
+  const t1 = lt.t_med ?? lastOf("tm");
   $("kT1").innerHTML = t1 == null ? "—" : `${f(t1)}<small>°C</small>`;
   const lo = Math.floor(Math.min(tmin - 10, t1 ?? tmin)), hi = Math.ceil(Math.max(tmax + 10, t1 ?? tmax)), pos = v => ((v - lo) / (hi - lo) * 100) + "%";
   $("mBand").style.left = pos(tmin); $("mBand").style.width = ((tmax - tmin) / (hi - lo) * 100) + "%";
   $("mMark").style.left = t1 == null ? "-20%" : pos(t1); $("mMin").textContent = f(lo, 0) + " °C"; $("mMax").textContent = f(hi, 0) + " °C";
   $("mTxt").textContent = `faixa alvo ${f(tmin, 0)}–${f(tmax, 0)} °C`;
   $("tDigTag").innerHTML = t1 == null ? tag("t-muted", "off", "sem leitura") : (t1 >= tmin && t1 <= tmax) ? tag("t-ok", "ok", "na faixa") : tag("t-warn", "warn", "fora da faixa");
-  const t1h = valueAt(all, "t1", Date.now() - 3600e3);
+  const t1h = valueAt(all, "tm", Date.now() - 3600e3);
   $("kT1d").textContent = (t1 != null && t1h != null) ? `${t1 - t1h >= 0 ? "▲" : "▼"} ${f(Math.abs(t1 - t1h))} °C` : "";
   $("kT1m").textContent = (t1 != null && t1h != null) ? "em relação a 1 h atrás" : (lt.taxa_t != null ? `tendência ${f(lt.taxa_t)} °C/h` : "");
 
@@ -636,6 +638,12 @@ function renderComps() {
 
 function renderBanner() {
   const b = $("banner"), j = last || {};
+  if (!devOnline() && !lastMsg && nuvemInfo) {
+    const ult = [...store.values()].reduce((m, r) => Math.max(m, r.x), 0);
+    b.className = "b-serious";
+    b.innerHTML = `<span class="ic" style="color:var(--ink-2)">${IC.wait}</span><div><h3>Sem conexão ao vivo · mostrando dados coletados</h3><ul><li>O biodigestor está sem internet. A última leitura enviada pelos apps Coletor é de ${ult ? new Date(ult).toLocaleString("pt-BR") : "—"} (${ult ? fmtAgo(ult) : "—"}). Faça uma nova coleta no local para atualizar.</li></ul></div>`;
+    return;
+  }
   if (!devOnline()) {
     b.className = lastMsg ? "b-crit" : "b-serious";
     b.innerHTML = `<span class="ic" style="color:${lastMsg ? "var(--crit)" : "var(--ink-2)"}">${lastMsg ? IC.crit : IC.wait}</span><div><h3>${lastMsg ? "Dispositivo offline" : "Aguardando o dispositivo"}</h3><ul><li>${lastMsg ? `Último dado recebido ${fmtAgo(lastMsg)}. Verifique energia e WiFi do ESP32.` : "Nenhum dado ainda — o ESP32 publica a cada 30 s."}</li></ul></div>`;
@@ -763,24 +771,40 @@ $("bCsv").onclick = () => {
   a.href = URL.createObjectURL(new Blob(["﻿" + lines.join("\n")], { type: "text/csv" }));
   a.download = `biodigestor_${new Date(curRange()[0]).toISOString().slice(0, 16).replace(":", "")}.csv`; a.click();
 };
+function lerCsv(txt, src) {
+  let n = 0;
+  txt = txt.replace(/^\ufeff/, ""); const L = txt.split(/\r?\n/).filter(Boolean); if (L.length < 2) return 0;
+  const sep = L[0].includes(";") ? ";" : ",", H = L[0].split(sep).map(s => s.trim()), ix = k => H.indexOf(k);
+  const g = (c, k) => { const i = ix(k); if (i < 0 || c[i] == null || c[i] === "") return null; const v = num(c[i]); return isNaN(v) ? null : v; };
+  for (const ln of L.slice(1)) {
+    const c = ln.split(sep); let ts = g(c, "ts");
+    if (ts == null && ix("ts_iso") >= 0) ts = Date.parse(c[ix("ts_iso")]) / 1000;
+    if (!ts) continue;
+    const nal = ix("alarmes") >= 0 ? (c[ix("alarmes")] || "").split("|").filter(a => a && a !== "MQ_NAO_CALIBRADO").length : g(c, "n_alarmes") || 0;
+    addRec({ x: ts * 1000, t1: g(c, "t_dig"), t2: g(c, "t_dig2"), ta: g(c, "t_amb"), ur: g(c, "ur_amb"), g2: g(c, "mq2_rel"), g7: g(c, "mq7_rel"),
+             p: g(c, "p_pa"), vol: g(c, "vol_nl") ?? g(c, "vol_l"), nal, sim: g(c, "sim") === 1, src }); n++;
+  }
+  return n;
+}
 $("fCsv").onchange = async ev => {
   let n = 0;
-  for (const file of ev.target.files) {
-    const txt = (await file.text()).replace(/^﻿/, ""), L = txt.split(/\r?\n/).filter(Boolean); if (L.length < 2) continue;
-    const sep = L[0].includes(";") ? ";" : ",", H = L[0].split(sep).map(s => s.trim()), ix = k => H.indexOf(k);
-    const g = (c, k) => { const i = ix(k); if (i < 0 || c[i] == null || c[i] === "") return null; const v = num(c[i]); return isNaN(v) ? null : v; };
-    for (const ln of L.slice(1)) {
-      const c = ln.split(sep); let ts = g(c, "ts");
-      if (ts == null && ix("ts_iso") >= 0) ts = Date.parse(c[ix("ts_iso")]) / 1000;
-      if (!ts) continue;
-      const nal = ix("alarmes") >= 0 ? (c[ix("alarmes")] || "").split("|").filter(a => a && a !== "MQ_NAO_CALIBRADO").length : g(c, "n_alarmes") || 0;
-      addRec({ x: ts * 1000, t1: g(c, "t_dig"), t2: g(c, "t_dig2"), ta: g(c, "t_amb"), ur: g(c, "ur_amb"), g2: g(c, "mq2_rel"), g7: g(c, "mq7_rel"),
-               p: g(c, "p_pa"), vol: g(c, "vol_nl") ?? g(c, "vol_l"), nal, sim: g(c, "sim") === 1, src: "csv" }); n++;
-    }
-  }
+  for (const file of ev.target.files) n += lerCsv(await file.text(), "csv");
   log(`CSV importado: ${n} linhas`); ev.target.value = "";
   $("seg").querySelector('[data-h="all"]').click();
 };
+
+// ---------------------------------------------------------------- Nuvem: série completa enviada pelos apps Coletor (dados/*.csv no repositório)
+let nuvemInfo = null;
+async function carregarNuvem() {
+  try {
+    const r = await fetch("dados/index.json", { cache: "no-store" }); if (!r.ok) return;
+    nuvemInfo = await r.json(); let n = 0;
+    for (const mes of (nuvemInfo.meses || [])) {
+      const rr = await fetch(`dados/${mes}.csv`, { cache: "no-store" }); if (rr.ok) n += lerCsv(await rr.text(), "nuvem");
+    }
+    if (n) { log(`nuvem: ${n} leituras carregadas (${(nuvemInfo.meses || []).join(", ")}), atualizado em ${new Date((nuvemInfo.atualizado || 0) * 1000).toLocaleString("pt-BR")}`); render(); }
+  } catch (e) { /* sem dados na nuvem ainda */ }
+}
 
 // ---------------------------------------------------------------- Conexão
 function pedirHistorico() { if (client?.connected) { histPts = 0; client.publish(cfg.topic + "/cmd", "historico:48"); } }
@@ -815,6 +839,7 @@ buildCharts();
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { buildCharts(); render(); refreshStatus(); });
 refreshStatus(); render();
 conectar();
+carregarNuvem();
 </script>
 </body>
 </html>

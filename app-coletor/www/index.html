@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f3f2f0" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#161514" media="(prefers-color-scheme: dark)">
+  <title>Coletor do Biodigestor</title>
+  <link rel="stylesheet" href="estilo.css">
+  <!-- Capacitor sem bundler: bundles IIFE copiados por scripts/copiar-vendor.mjs -->
+  <script src="vendor/capacitor.js"></script>
+  <script src="vendor/preferences.js"></script>
+  <script src="vendor/filesystem.js"></script>
+  <script src="vendor/network.js"></script>
+  <script src="vendor/app.js"></script>
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <header class="topo">
+    <svg class="marca" viewBox="0 0 32 32" aria-hidden="true">
+      <circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="2"/>
+      <path d="M7 20a9.5 9.5 0 0 1 18 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".45"/>
+      <path d="M16 18 22 10" stroke="var(--cobre)" stroke-width="2.4" stroke-linecap="round"/>
+      <circle cx="16" cy="18" r="2.2" fill="var(--cobre)"/>
+    </svg>
+    <div class="topo-texto">
+      <h1>Coletor do Biodigestor</h1>
+      <p id="sub-dispositivo">Coleta offline · UTFPR</p>
+    </div>
+    <button id="bt-config" class="icone" aria-label="Configurações" title="Configurações">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.6 7.6 0 0 0-1.7-1L15 3h-4l-.4 2.9c-.6.3-1.2.6-1.7 1l-2.5-1-2 3.5L6.6 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1L11 21h4l.4-2.9c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg>
+    </button>
+  </header>
+
+  <!-- ===================== TELA PRINCIPAL ===================== -->
+  <main id="tela-principal">
+    <div id="faixa-rede" class="faixa"><span class="ponto"></span><span id="txt-rede">Verificando rede…</span></div>
+
+    <div id="aviso-config" class="aviso" hidden>
+      Antes da primeira coleta, abra <b>Configurações</b> e preencha o token do ESP e, para enviar à nuvem, o token do GitHub.
+    </div>
+
+    <section class="cartao" aria-labelledby="t-esp">
+      <div class="cartao-topo">
+        <h2 id="t-esp">ESP do biodigestor</h2>
+        <span id="pill-esp" class="pill">sem contato</span>
+      </div>
+      <dl class="grade">
+        <div><dt>Série do cartão</dt><dd id="v-serie" class="mono">—</dd></div>
+        <div><dt>Último n no ESP</dt><dd id="v-n-esp" class="num">—</dd></div>
+        <div><dt>Último n coletado</dt><dd id="v-n-col" class="num">—</dd></div>
+        <div><dt>Hora do ESP</dt><dd id="v-hora">—</dd></div>
+      </dl>
+      <div class="cartao-rodape">
+        <span id="v-esp-quando">Nenhum contato ainda.</span>
+        <button id="bt-verificar" class="link">Verificar</button>
+      </div>
+    </section>
+
+    <section class="cartao" aria-labelledby="t-nuvem">
+      <div class="cartao-topo">
+        <h2 id="t-nuvem">Nuvem (GitHub)</h2>
+        <span id="pill-nuvem" class="pill">—</span>
+      </div>
+      <dl class="grade">
+        <div><dt>Linhas pendentes</dt><dd id="v-pend" class="num">0</dd></div>
+        <div><dt>Eventos pendentes</dt><dd id="v-pend-ev" class="num">0</dd></div>
+        <div class="largo"><dt>Último envio</dt><dd id="v-envio">nunca</dd></div>
+      </dl>
+      <div class="cartao-rodape"><span id="v-repo" class="mono">—</span></div>
+    </section>
+
+    <section class="acoes" aria-label="Ações">
+      <button id="bt-conectar" class="bt bt-sec"><span class="passo">1</span><span id="txt-conectar">Conectar à rede do biodigestor</span></button>
+      <button id="bt-coletar" class="bt bt-pri"><span class="passo">2</span>Coletar agora</button>
+      <button id="bt-enviar" class="bt bt-sec"><span class="passo">3</span>Enviar para a nuvem</button>
+      <div id="progresso" class="progresso" hidden>
+        <div class="barra"><div id="barra-int"></div></div>
+        <span id="txt-progresso">…</span>
+      </div>
+    </section>
+
+    <section class="cartao" aria-labelledby="t-leitura">
+      <div class="cartao-topo">
+        <h2 id="t-leitura">Última leitura</h2>
+        <span id="v-leitura-quando" class="discreto">—</span>
+      </div>
+      <div class="leituras">
+        <div class="leitura"><span class="rotulo">Digestato (média)</span><span class="valor"><b id="l-tmed">—</b><small>°C</small></span></div>
+        <div class="leitura"><span class="rotulo">Ar ambiente</span><span class="valor"><b id="l-tamb">—</b><small>°C</small></span></div>
+        <div class="leitura"><span class="rotulo">Umidade do ar</span><span class="valor"><b id="l-ur">—</b><small>%</small></span></div>
+        <div class="leitura"><span class="rotulo">Pressão (headspace)</span><span class="valor"><b id="l-pa">—</b><small>Pa</small></span></div>
+      </div>
+      <div id="l-alarmes" class="alarmes"><span class="discreto">Sem alarmes.</span></div>
+    </section>
+
+    <section class="cartao" aria-labelledby="t-log">
+      <div class="cartao-topo">
+        <h2 id="t-log">Registro</h2>
+        <button id="bt-limpar-log" class="link">Limpar</button>
+      </div>
+      <ol id="log" class="log"></ol>
+    </section>
+  </main>
+
+  <!-- ===================== CONFIGURAÇÕES ===================== -->
+  <section id="tela-config" hidden>
+    <form id="form-config" autocomplete="off" novalidate>
+      <fieldset>
+        <legend>Identificação</legend>
+        <label>Nome do coletor <input name="coletor" placeholder="ex.: Lucas" maxlength="40"></label>
+        <p class="ajuda">Aparece nas mensagens de commit e no registro de coletas do ESP.</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>ESP</legend>
+        <label>Endereço do ESP <input name="espUrl" inputmode="url" placeholder="http://192.168.4.1"></label>
+        <label>Token do ESP
+          <span class="senha"><input name="espToken" type="password" placeholder="token de comando"><button type="button" class="ver" data-alvo="espToken">mostrar</button></span>
+        </label>
+        <p class="ajuda">O token é o mesmo dos comandos MQTT (configurado no firmware). Por segurança, o Android só permite HTTP sem criptografia para <span class="mono">192.168.4.1</span> e <span class="mono">biodigestor.local</span>.</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Rede Wi-Fi do biodigestor</legend>
+        <label>Nome da rede (SSID) <input name="apSsid" placeholder="Biodigestor-XXXX"></label>
+        <label>Senha da rede
+          <span class="senha"><input name="apSenha" type="password" placeholder="biogas123"><button type="button" class="ver" data-alvo="apSenha">mostrar</button></span>
+        </label>
+        <p class="ajuda">Deixe <span class="mono">Biodigestor-XXXX</span> para aceitar qualquer rede que comece com “Biodigestor-”. Usado no botão “Conectar” (Android 10 ou mais novo).</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>GitHub</legend>
+        <div class="duas">
+          <label>Dono <input name="ghDono" placeholder="lribeiro770-debug" autocapitalize="off"></label>
+          <label>Repositório <input name="ghRepo" placeholder="biodigestor-painel" autocapitalize="off"></label>
+        </div>
+        <label>Ramo <input name="ghRamo" placeholder="main" autocapitalize="off"></label>
+        <label>Token do GitHub
+          <span class="senha"><input name="ghToken" type="password" placeholder="github_pat_…" autocapitalize="off"><button type="button" class="ver" data-alvo="ghToken">mostrar</button></span>
+        </label>
+        <details class="guia">
+          <summary>Como criar o token do GitHub</summary>
+          <ol>
+            <li>No navegador, entre em <b>github.com</b> com a conta que tem acesso ao repositório.</li>
+            <li>Vá em <b>Settings → Developer settings → Personal access tokens → Fine-grained tokens</b> e toque em <b>Generate new token</b>.</li>
+            <li>Nome: “Coletor Android”. Validade: a que o grupo preferir (ex.: 90 dias).</li>
+            <li><b>Resource owner</b>: o dono do repositório (ex.: lribeiro770-debug).</li>
+            <li><b>Repository access → Only select repositories</b> → escolha só <b>biodigestor-painel</b>.</li>
+            <li><b>Permissions → Repository permissions → Contents: Read and write</b>. Não marque mais nada (Metadata: Read-only entra sozinho).</li>
+            <li>Gere, copie o token (<span class="mono">github_pat_…</span>) e cole acima. Ele fica salvo <b>só neste celular</b>.</li>
+          </ol>
+        </details>
+        <details class="guia">
+          <summary>Avançado</summary>
+          <label>Endereço da API <input name="ghApi" inputmode="url" placeholder="https://api.github.com" autocapitalize="off"></label>
+          <p class="ajuda">Só mude para testes (servidor falso).</p>
+        </details>
+      </fieldset>
+
+      <fieldset>
+        <legend>Envio</legend>
+        <label class="chave"><input type="checkbox" name="autoEnviar"><span>Enviar automaticamente quando houver internet</span></label>
+      </fieldset>
+
+      <div class="barra-botoes">
+        <button type="submit" class="bt bt-pri">Salvar</button>
+        <button type="button" id="bt-testar-esp" class="bt bt-sec">Testar ESP</button>
+        <button type="button" id="bt-testar-gh" class="bt bt-sec">Testar GitHub</button>
+        <button type="button" id="bt-voltar" class="bt bt-ter">Voltar</button>
+      </div>
+
+      <fieldset>
+        <legend>Dados neste celular</legend>
+        <ul id="lista-arquivos" class="arquivos"><li class="discreto">—</li></ul>
+        <p class="ajuda">Os CSV ficam na área privada do app (mesmo formato da nuvem). Desinstalar o app apaga esses arquivos; envie antes.</p>
+      </fieldset>
+      <p class="versao" id="txt-versao"></p>
+    </form>
+  </section>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- HTTP sem criptografia só para o ESP (AP 192.168.4.1 e mDNS biodigestor.local). Todo o resto exige HTTPS. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">192.168.4.1</domain>
+        <domain includeSubdomains="false">biodigestor.local</domain>
+    </domain-config>
+</network-security-config>
