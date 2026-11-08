@@ -303,7 +303,10 @@ pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; color: var
       <label for="dObs">Observação</label><textarea id="dObs" class="in" rows="2"></textarea>
       <div class="sub" id="dCalc" style="margin-top:6px">&nbsp;</div>
       <button class="btn primary" id="bDiario" style="margin-top:8px">Registrar</button>
-      <table style="margin-top:12px"><thead><tr><th>Quando</th><th style="text-align:left">Tipo</th><th>Valor</th><th style="text-align:left">Obs.</th></tr></thead><tbody id="dLista"></tbody></table>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;gap:8px">
+        <span class="sub" id="dInfo">aguardando o ESP32…</span>
+        <button class="btn" id="bDiarioCsv">Exportar diário</button></div>
+      <table style="margin-top:6px"><thead><tr><th>Quando</th><th style="text-align:left">Tipo</th><th>Valor</th><th style="text-align:left">Obs.</th></tr></thead><tbody id="dLista"></tbody></table>
     </div>
     <div class="card pad">
       <h3>Comandos</h3>
@@ -400,7 +403,12 @@ const alSince = new Map();
 // Registro: { x(ms), t1, t2, ta, ur, g2, g7, p, vol, nal, sim, src: "live" | "hist" | "csv" | "nuvem" }
 const store = new Map();
 let last = null, lastMsg = 0, devStatus = "", client = null, histPts = 0;
-const diario = [];
+const diario = new Map();            // chave ts|tipo → entrada { ..., _st: "ok" (gravada no ESP32) | "pend" (aguardando o ESP32) }
+const PEND_KEY = "bioDiarioPend";
+const dKey = e => `${e.ts}|${e.tipo}`;
+let pendentes = [];
+try { pendentes = JSON.parse(localStorage.getItem(PEND_KEY) || "[]"); } catch (e) {}
+const salvarPend = () => { try { localStorage.setItem(PEND_KEY, JSON.stringify(pendentes)); } catch (e) {} };
 const range = { mode: "24" };
 
 function addRec(r) {
@@ -427,6 +435,7 @@ const filtered = () => { const [a, b] = curRange(); return sortedAll().filter(r 
 // ---------------------------------------------------------------- Gráficos (1 eixo por gráfico · linhas 2px · grade hairline)
 Chart.defaults.font.family = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 Chart.defaults.font.size = 11.5;
+const MARCA = { alimentacao: "alim.", retirada: "retir.", vhead: "V head" };
 Chart.register({
   id: "refs",
   beforeDatasetsDraw(ch, _a, o) {
@@ -435,6 +444,17 @@ Chart.register({
     for (const b of o.bands || []) {
       const y1 = Math.max(A.top, y.getPixelForValue(b.to)), y2 = Math.min(A.bottom, y.getPixelForValue(b.from));
       if (y2 > y1) { ctx.fillStyle = b.color; ctx.fillRect(A.left, y1, A.right - A.left, y2 - y1); }
+    }
+    const x = ch.scales.x;
+    if (x && x.type === "time") {                         // marcadores do diário (alimentação, retirada…)
+      ctx.setLineDash([3, 3]); ctx.font = "10px system-ui"; ctx.textAlign = "left";
+      for (const d of diario.values()) {
+        if (!MARCA[d.tipo]) continue;
+        const px = x.getPixelForValue(d.ts * 1000); if (px < A.left || px > A.right) continue;
+        ctx.strokeStyle = css("--warn"); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(px, A.top); ctx.lineTo(px, A.bottom); ctx.stroke();
+        ctx.fillStyle = css("--muted"); ctx.fillText(MARCA[d.tipo], px + 3, A.top + 10);
+      }
+      ctx.setLineDash([]);
     }
     for (const l of o.lines || []) {
       const py = y.getPixelForValue(l.y); if (py < A.top || py > A.bottom) continue;
@@ -706,24 +726,65 @@ function calcCo2() {
   $("dCalc").textContent = (vi > 0 && vf >= 0 && vf <= vi) ? `CO₂ ≈ ${f((vi - vf) / vi * 100)} % · CH₄ ≈ ${f(vf / vi * 100)} % (resíduo não absorvido)` : "Informe Vi (amostra) e Vf (após contato com NaOH).";
 }
 $("dTipo").onchange = atualizaForm; $("dVi").oninput = $("dVf").oninput = calcCo2; atualizaForm();
-function addDiario(e) {
-  const k = e.ts + e.tipo + e.valor; if (diario.some(d => d._k === k)) return; e._k = k; diario.unshift(e);
+function addDiario(e, st) {
+  const k = dKey(e), cur = diario.get(k);
+  if (cur && cur._st === "ok" && st !== "ok") return;
+  diario.set(k, { ...e, _st: st });
+}
+function desenharDiario() {
   const tb = $("dLista"); tb.innerHTML = "";
-  for (const d of diario.slice(0, 12)) {
+  const lista = [...diario.values()].sort((a, b) => b.ts - a.ts);
+  for (const d of lista.slice(0, 15)) {
     const tr = document.createElement("tr");
-    for (const [txt, al] of [[new Date(d.ts * 1000).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })], [ROT[d.tipo] || d.tipo, "left"], [`${d.valor ?? ""} ${d.unid ?? ""}`], [`${d.obs || ""}${d.autor ? " — " + d.autor : ""}`, "left"]]) {
+    const quando = new Date(d.ts * 1000).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) + (d._st === "pend" ? " ⏳" : "");
+    for (const [txt, al] of [[quando], [ROT[d.tipo] || d.tipo, "left"], [`${d.valor ?? ""} ${d.unid ?? ""}`], [`${d.obs || ""}${d.autor ? " — " + d.autor : ""}`, "left"]]) {
       const td = document.createElement("td"); td.textContent = txt; if (al) td.style.textAlign = al; tr.appendChild(td); }
+    if (d._st === "pend") tr.title = "Aguardando o ESP32 gravar (ele precisa estar online). Fica guardado neste aparelho e é reenviado sozinho.";
     tb.appendChild(tr);
   }
+  const np = lista.filter(d => d._st === "pend").length;
+  $("dInfo").textContent = lista.length
+    ? `${lista.length - np} gravada(s) no ESP32${np ? ` · ${np} aguardando o ESP32 (⏳)` : ""}`
+    : "nenhum registro ainda";
+  render();
 }
+function onDiarioHist(arr) {                     // lista retida publicada pelo ESP32 = registros confirmados
+  if (!Array.isArray(arr)) return;
+  const conf = new Set(arr.map(dKey));
+  for (const e of arr) addDiario(e, "ok");
+  const antes = pendentes.length;
+  pendentes = pendentes.filter(p => !conf.has(dKey(p)));
+  if (pendentes.length !== antes) { salvarPend(); log(`diário: ${antes - pendentes.length} registro(s) confirmado(s) pelo ESP32`); }
+  desenharDiario();
+}
+function enviarPendentes() {
+  if (!client?.connected || !pendentes.length) return;
+  for (const p of pendentes) client.publish(cfg.topic + "/diario", JSON.stringify(p), { qos: 1 });
+}
+setInterval(() => { if (devStatus === "online") enviarPendentes(); }, 30000);
+for (const p of pendentes) addDiario(p, "pend");
+desenharDiario();
+$("bDiarioCsv").onclick = () => {
+  const lista = [...diario.values()].sort((a, b) => a.ts - b.ts); if (!lista.length) return log("diário vazio");
+  const cols = ["data_hora", "ts", "tipo", "valor", "unid", "autor", "obs", "co2_pct", "vi_ml", "vf_ml", "situacao"];
+  const esc = v => v == null ? "" : String(v).replace(/[;\r\n]/g, " ");
+  const lines = [cols.join(";")].concat(lista.map(d => [new Date(d.ts * 1000).toLocaleString("pt-BR"), d.ts, ROT[d.tipo] || d.tipo,
+    typeof d.valor === "number" ? String(d.valor).replace(".", ",") : esc(d.valor), d.unid, d.autor, d.obs, d.co2_pct, d.vi_ml, d.vf_ml,
+    d._st === "ok" ? "gravado no ESP32" : "pendente"].map(esc).join(";")));
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["\ufeff" + lines.join("\n")], { type: "text/csv" }));
+  a.download = `diario_biodigestor_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+};
 $("bDiario").onclick = () => {
-  if (!client || !client.connected) return log("não conectado");
+  if (!client || !client.connected) return log("sem conexão com o servidor: tente de novo");
   const t = $("dTipo").value, e = { ts: Math.floor(Date.now() / 1000), tipo: t, autor: $("dAutor").value.trim(), obs: $("dObs").value.trim(), unid: TIPOS[t][1] };
   if (t === "co2") { const vi = num($("dVi").value), vf = num($("dVf").value); if (!(vi > 0 && vf >= 0 && vf <= vi)) return log("teste de CO₂: valores inválidos");
                      e.vi_ml = vi; e.vf_ml = vf; e.co2_pct = +((vi - vf) / vi * 100).toFixed(1); e.valor = +(vf / vi * 100).toFixed(1); }
   else if (t === "queima") e.valor = $("dChamaSel").value;
   else if (TIPOS[t][0]) { e.valor = num($("dValor").value); if (Number.isNaN(e.valor)) return log("informe o valor"); }
+  pendentes.push(e); salvarPend(); addDiario(e, "pend"); desenharDiario();
   client.publish(cfg.topic + "/diario", JSON.stringify(e), { qos: 1 });
+  if (devStatus !== "online") log("ESP32 offline: o registro ficou guardado neste aparelho e será enviado quando ele voltar");
   if (t === "vhead") { if (cfg.tok) client.publish(cfg.topic + "/cmd", `vhead:${e.valor}:${cfg.tok}`); else log("V headspace não enviado ao ESP32: informe o token em Conexão"); }
   cfg.autor = e.autor; saveCfg();
   $("dValor").value = $("dObs").value = $("dVi").value = $("dVf").value = ""; calcCo2(); log("diário: " + ROT[t] + " registrado");
@@ -822,9 +883,10 @@ function conectar() {
     try {
       if (sub === "telemetria") onTelem(JSON.parse(s));
       else if (sub === "historico") onHistorico(JSON.parse(s));
-      else if (sub === "status") { devStatus = s; refreshStatus(); }
+      else if (sub === "status") { const era = devStatus; devStatus = s; refreshStatus(); if (s === "online" && era !== "online") setTimeout(enviarPendentes, 3000); }
       else if (sub === "evento") log(s);
-      else if (sub === "diario") addDiario(JSON.parse(s));
+      else if (sub === "diario/hist") onDiarioHist(JSON.parse(s));
+      else if (sub === "diario") { addDiario(JSON.parse(s), "pend"); desenharDiario(); }
     } catch (e) { log("mensagem inválida em " + sub); }
   });
 }
