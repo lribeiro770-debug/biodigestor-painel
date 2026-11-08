@@ -1,1 +1,34 @@
-{"proto":1,"dispositivo":"biodig-utfpr-cm-01","meses":[],"series":{},"ultimo_ts":0,"atualizado":0,"colunas":["ts","t_dig","t_dig2","t_med","t_amb","ur_amb","mq2_rel","mq7_rel","p_pa","vol_nl","vazao_nlh","rele","alarmes","sim","ts_ok","serie","n"]}
+{
+ "proto": 1,
+ "dispositivo": "biodig-utfpr-cm-01",
+ "meses": [
+  "2026-11"
+ ],
+ "series": {
+  "f3697058": {
+   "ultimo_n": 96,
+   "ultimo_ev": 121
+  }
+ },
+ "ultimo_ts": 1794178542,
+ "atualizado": 1794178617,
+ "colunas": [
+  "ts",
+  "t_dig",
+  "t_dig2",
+  "t_med",
+  "t_amb",
+  "ur_amb",
+  "mq2_rel",
+  "mq7_rel",
+  "p_pa",
+  "vol_nl",
+  "vazao_nlh",
+  "rele",
+  "alarmes",
+  "sim",
+  "ts_ok",
+  "serie",
+  "n"
+ ]
+}
