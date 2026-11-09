@@ -94,6 +94,9 @@ ts,serie,n,tipo,detalhe
 1794263549,f3697058,191,hora,coletor (relógio acertado)
 1794263549,f3697058,192,coleta,Lucas ate 498
 1794263777,f3697058,193,coleta,Lucas ate 502
+1794263950,f3697058,194,coleta,Lucas ate 504
+1794264051,f3697058,195,portal,portal de Wi-Fi aberto por 5 min (coleta indisponível)
+1794265314,f3697058,204,hora,coletor (relógio acertado)
 ,f3697058,1,boot,fw 3.0.1 reset=1
 ,f3697058,2,wifi_on,BLZ RIBEIRO
 ,f3697058,4,boot,fw 3.0.1 reset=1
@@ -192,3 +195,11 @@ ts,serie,n,tipo,detalhe
 ,f3697058,188,boot,fw 3.0.7 reset=1
 ,f3697058,189,boot,fw 3.0.7 reset=1
 ,f3697058,190,boot,fw 3.0.7 reset=1
+,f3697058,196,boot,fw 3.0.7 reset=1
+,f3697058,197,portal,portal de Wi-Fi aberto por 5 min (coleta indisponível)
+,f3697058,198,boot,fw 3.0.7 reset=1
+,f3697058,199,boot,fw 3.0.7 reset=1
+,f3697058,200,portal,portal de Wi-Fi aberto por 5 min (coleta indisponível)
+,f3697058,201,boot,fw 3.0.7 reset=1
+,f3697058,202,portal,portal de Wi-Fi aberto por 5 min (coleta indisponível)
+,f3697058,203,portal,portal fechado; API de coleta ativa
