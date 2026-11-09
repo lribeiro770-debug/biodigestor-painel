@@ -88,6 +88,10 @@ ts,serie,n,tipo,detalhe
 1794258450,f3697058,153,hora,coletor (relógio acertado)
 1794258450,f3697058,154,coleta,Lucas ate 415
 1794258727,f3697058,155,coleta,Lucas ate 420
+1794259618,f3697058,156,coleta,Lucas ate 435
+1794259838,f3697058,157,wifi_on,Galaxy A513C76
+1794259937,f3697058,158,wifi_off,
+1794263549,f3697058,191,hora,coletor (relógio acertado)
 ,f3697058,1,boot,fw 3.0.1 reset=1
 ,f3697058,2,wifi_on,BLZ RIBEIRO
 ,f3697058,4,boot,fw 3.0.1 reset=1
@@ -154,3 +158,35 @@ ts,serie,n,tipo,detalhe
 ,f3697058,145,boot,fw 3.0.5 reset=1
 ,f3697058,146,wifi_on,BLZ RIBEIRO
 ,f3697058,152,boot,fw 3.0.5 reset=1
+,f3697058,159,boot,fw 3.0.5 reset=1
+,f3697058,160,alarme_on,SOBREPRESSAO
+,f3697058,161,alarme_off,SOBREPRESSAO
+,f3697058,162,boot,fw 3.0.5 reset=1
+,f3697058,163,boot,fw 3.0.5 reset=1
+,f3697058,164,boot,fw 3.0.6 reset=1
+,f3697058,165,portal,portal de Wi-Fi aberto por 5 min (coleta indisponível)
+,f3697058,166,boot,fw 3.0.6 reset=1
+,f3697058,167,portal,portal de Wi-Fi aberto por 5 min (coleta indisponível)
+,f3697058,168,boot,fw 3.0.6 reset=1
+,f3697058,169,portal,portal de Wi-Fi aberto por 5 min (coleta indisponível)
+,f3697058,170,portal,portal fechado; API de coleta ativa
+,f3697058,171,boot,fw 3.0.6 reset=1
+,f3697058,172,wifi_on,Galaxy A513C76
+,f3697058,173,portal,portal de Wi-Fi aberto por 5 min (coleta indisponível)
+,f3697058,174,boot,fw 3.0.6 reset=4
+,f3697058,175,wifi_on,Galaxy A513C76
+,f3697058,176,portal,portal de Wi-Fi aberto por 5 min (coleta indisponível)
+,f3697058,177,boot,fw 3.0.6 reset=4
+,f3697058,178,wifi_on,Galaxy A513C76
+,f3697058,179,portal,portal de Wi-Fi aberto por 5 min (coleta indisponível)
+,f3697058,180,alarme_on,SOBREPRESSAO
+,f3697058,181,alarme_off,SOBREPRESSAO
+,f3697058,182,wifi_off,
+,f3697058,183,portal,portal fechado; API de coleta ativa
+,f3697058,184,boot,fw 3.0.6 reset=1
+,f3697058,185,portal,portal de Wi-Fi aberto por 5 min (coleta indisponível)
+,f3697058,186,boot,fw 3.0.6 reset=1
+,f3697058,187,portal,portal de Wi-Fi aberto por 5 min (coleta indisponível)
+,f3697058,188,boot,fw 3.0.7 reset=1
+,f3697058,189,boot,fw 3.0.7 reset=1
+,f3697058,190,boot,fw 3.0.7 reset=1
