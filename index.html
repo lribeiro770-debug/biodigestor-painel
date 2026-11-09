@@ -254,7 +254,7 @@ pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; color: var
     </div>
     <div class="card w2">
       <div class="ch-h"><div><h3>Produção de biogás</h3><p id="pvSub">NL por hora</p></div></div>
-      <div class="cv-box"><canvas id="chV" aria-label="Produção de biogás por intervalo"></canvas><div class="empty" id="emV">Sem medição de volume<br>(sensor de pressão ainda não instalado)</div></div>
+      <div class="cv-box"><canvas id="chV" aria-label="Produção de biogás por intervalo"></canvas><div class="empty" id="emV">Produção não medida nesta versão<br>(gasômetro de balão flexível: a pressão não indica o volume)</div></div>
     </div>
     <div class="card w2">
       <div class="ch-h"><div><h3>Estratificação</h3><p>ΔT entre as sondas · linha = limite</p></div></div>
@@ -510,6 +510,7 @@ const series = (rows, k) => rows.map(r => ({ x: r.x, y: r[k] ?? null }));
 const has = (rows, k) => rows.some(r => r[k] != null);
 const bucketMs = span => span <= 3 * 3600e3 ? 10 * 60e3 : span <= 30 * 3600e3 ? 3600e3 : 3 * 3600e3;
 const bucketLbl = ms => ms === 600e3 ? "NL a cada 10 min" : ms === 3600e3 ? "NL por hora" : "NL a cada 3 h";
+const temVol = rows => rows.some(r => r.vol > 0);   // vol = 0 vem de firmware antigo sem medição
 function producao(rows, ms) {    // soma dos incrementos do volume acumulado (ignora zeragens)
   const out = new Map(); let prev = null;
   for (const r of rows) { if (r.vol == null) continue;
@@ -555,7 +556,7 @@ function doRender() {
   const em = (id, on) => $(id).classList.toggle("on", on);
   em("emT", !has(rows, "t1") && !has(rows, "t2") && !has(rows, "ta")); em("emDT", !rows.some(r => r.t1 != null && r.t2 != null));
   em("emP", !has(rows, "p")); em("emG", !has(rows, "g2") && !has(rows, "g7")); em("emU", !has(rows, "ur"));
-  em("emV", !has(rows, "vol")); em("emA", !rows.some(r => r.nal));
+  em("emV", !temVol(rows)); em("emA", !rows.some(r => r.nal));
   for (const c of Object.values(charts)) c.update("none");
 
   $("lgT").innerHTML = [["Sonda 1", "--s1", "t1"], ["Sonda 2", "--s2", "t2"], ["Ambiente", "--ctx", "ta"]].map(([n, c, k]) => `<span><i style="background:var(${c})"></i>${n} <b>${f(lastOf(k))} °C</b></span>`).join("");
@@ -586,11 +587,11 @@ function doRender() {
   sparkline($("spTA"), series(rows, "ta"), css("--ctx"));
 
   // ---- Biogás
-  if (has(rows, "vol")) {
+  if (temVol(rows)) {
     const prod = prodS.reduce((s, p) => s + p.y, 0);
     $("kV").innerHTML = `${f(prod, prod < 10 ? 2 : 1)}<small>NL</small>`;
     $("kVm").textContent = `média ${f(prod / (span / 3600e3), 2)} NL/h${lt.vazao_nlh != null ? ` · agora ${f(lt.vazao_nlh, 2)} NL/h` : ""}`;
-  } else { $("kV").textContent = "—"; $("kVm").textContent = "medição de volume não instalada"; }
+  } else { $("kV").textContent = "—"; $("kVm").textContent = "não medida (gasômetro de balão flexível)"; }
   sparkline($("spV"), series(rows, "vol"), css("--s1"));
 
   // ---- Gás
