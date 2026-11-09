@@ -631,7 +631,7 @@ const signal = rssi => { const n = rssi >= -60 ? 4 : rssi >= -70 ? 3 : rssi >= -
 
 function renderComps() {
   const j = last || {}, on = devOnline(), al = new Set(j.alarmes || []), OFF = ["off", "sem dados", "—"];
-  const mq = (o, sAl, sFail) => !on ? OFF : j.gas_ok === false ? ["wait", "aquecendo", "pré-aquecimento (3 min)"]
+  const mq = (o, sAl, sFail) => !on ? OFF : j.gas_ok === false ? ["wait", "aquecendo", j.up != null ? `pré-aquecimento: faltam ~${Math.max(1, Math.ceil((900 - j.up) / 60))} min` : "pré-aquecimento (15 min)"]
     : (!o || o.rs == null || al.has(sFail)) ? ["crit", "falha", "sem leitura"] : o.rel == null ? ["warn", "não calibrado", `Rs ${f(o.rs / 1000)} kΩ`]
     : (o.rel < LIMITES.gas || al.has(sAl)) ? ["crit", "alarme", `Rs/R0 ${f(o.rel, 2)}`] : ["ok", "ok", `Rs/R0 ${f(o.rel, 2)}`];
   const temp = (v, s) => !on ? OFF : (v == null || al.has(s)) ? ["crit", "falha", "sem leitura"] : ["ok", "ok", `${f(v)} °C`];
