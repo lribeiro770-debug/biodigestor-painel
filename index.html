@@ -230,7 +230,7 @@ pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; color: var
       <svg class="spark" id="spTA" preserveAspectRatio="none"></svg>
     </div>
     <div class="card kpi">
-      <div class="lbl"><span>Biogás no período</span></div>
+      <div class="lbl"><span id="kVl">Pressão do gás</span><span id="pTag"></span></div>
       <div class="val" id="kV">—</div>
       <div class="meta" id="kVm"></div>
       <svg class="spark" id="spV" preserveAspectRatio="none"></svg>
@@ -591,8 +591,17 @@ function doRender() {
     const prod = prodS.reduce((s, p) => s + p.y, 0);
     $("kV").innerHTML = `${f(prod, prod < 10 ? 2 : 1)}<small>NL</small>`;
     $("kVm").textContent = `média ${f(prod / (span / 3600e3), 2)} NL/h${lt.vazao_nlh != null ? ` · agora ${f(lt.vazao_nlh, 2)} NL/h` : ""}`;
-  } else { $("kV").textContent = "—"; $("kVm").textContent = "não medida (gasômetro de balão flexível)"; }
-  sparkline($("spV"), series(rows, "vol"), css("--s1"));
+    $("kVl").textContent = "Biogás no período"; $("pTag").innerHTML = "";
+    sparkline($("spV"), series(rows, "vol"), css("--s1"));
+  } else {                                              // balão flexível: volume não medido → mostra a pressão
+    $("kVl").textContent = "Pressão do gás";
+    const p = lt.p_pa ?? lastOf("p"), ps = rows.map(r => r.p).filter(v => v != null);
+    $("kV").innerHTML = p == null ? "—" : `${f(p, 0)}<small>Pa</small>`;
+    $("kVm").textContent = p == null ? "sensor de pressão sem leitura"
+      : `≈ ${f(p / 98.07, 1)} cmH₂O${ps.length ? ` · período: ${f(Math.min(...ps), 0)} a ${f(Math.max(...ps), 0)} Pa` : ""}`;
+    $("pTag").innerHTML = p == null ? "" : p > LIMITES.pMax ? tag("t-crit", "crit", "sobrepressão") : tag("t-ok", "ok", "normal");
+    sparkline($("spV"), series(rows, "p"), css("--s1"));
+  }
 
   // ---- Gás
   const g2 = lt.gas_ok === false ? null : (lt.mq2?.rel ?? lastOf("g2"));
