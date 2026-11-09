@@ -87,6 +87,7 @@ ts,serie,n,tipo,detalhe
 1794254583,f3697058,151,alarme_off,SOBREPRESSAO
 1794258450,f3697058,153,hora,coletor (relógio acertado)
 1794258450,f3697058,154,coleta,Lucas ate 415
+1794258727,f3697058,155,coleta,Lucas ate 420
 ,f3697058,1,boot,fw 3.0.1 reset=1
 ,f3697058,2,wifi_on,BLZ RIBEIRO
 ,f3697058,4,boot,fw 3.0.1 reset=1
