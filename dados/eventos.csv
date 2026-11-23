@@ -144,6 +144,12 @@ ts,serie,n,tipo,detalhe
 1795451399,f3697058,255,wifi_on,Galaxy A513C76
 1795451405,f3697058,256,hora,ntp (relógio acertado)
 1795452147,f3697058,257,wifi_off,
+1795452659,f3697058,258,coleta,Lucas ate 1422
+1795453047,f3697058,259,wifi_on,Galaxy A513C76
+1795454190,f3697058,260,wifi_off,
+1795455582,f3697058,261,boot,fw 3.0.7 reset=9
+1795463544,f3697058,265,hora,coletor (relógio acertado)
+1795463548,f3697058,266,coleta,Lucas ate 1596
 ,f3697058,1,boot,fw 3.0.1 reset=1
 ,f3697058,2,wifi_on,BLZ RIBEIRO
 ,f3697058,4,boot,fw 3.0.1 reset=1
@@ -255,3 +261,5 @@ ts,serie,n,tipo,detalhe
 ,f3697058,208,boot,fw 3.0.7 reset=1
 ,f3697058,209,boot,fw 3.0.7 reset=1
 ,f3697058,215,boot,fw 3.0.7 reset=1
+,f3697058,262,boot,fw 3.0.7 reset=1
+,f3697058,263,boot,fw 3.0.7 reset=1
