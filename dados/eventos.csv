@@ -99,6 +99,20 @@ ts,serie,n,tipo,detalhe
 1794265314,f3697058,204,hora,coletor (relógio acertado)
 1794265314,f3697058,205,coleta,Lucas ate 529
 1795398056,f3697058,210,hora,coletor (relógio acertado)
+1795398056,f3697058,211,coleta,Lucas ate 544
+1795398158,f3697058,212,portal,portal de Wi-Fi aberto por 5 min (coleta indisponível)
+1795398204,f3697058,213,portal,portal fechado; API de coleta ativa
+1795398204,f3697058,214,wifi_on,Galaxy A513C76
+1795398669,f3697058,217,hora,ntp (relógio acertado)
+1795398735,f3697058,218,alarme_on,ESTRATIFICACAO
+1795398855,f3697058,219,alarme_on,SOBREPRESSAO
+1795398885,f3697058,220,alarme_off,SOBREPRESSAO
+1795399000,f3697058,221,alarme_off,ESTRATIFICACAO
+1795399274,f3697058,222,sd_erro,cartão falhou/ausente e voltou (amostras do intervalo perdidas)
+1795399575,f3697058,223,alarme_on,MQ7_ALTERADO
+1795399795,f3697058,224,alarme_on,SENSOR_DHT
+1795400666,f3697058,225,alarme_off,MQ7_ALTERADO
+1795403191,f3697058,226,wifi_off,
 ,f3697058,1,boot,fw 3.0.1 reset=1
 ,f3697058,2,wifi_on,BLZ RIBEIRO
 ,f3697058,4,boot,fw 3.0.1 reset=1
@@ -209,3 +223,4 @@ ts,serie,n,tipo,detalhe
 ,f3697058,207,portal,portal de Wi-Fi aberto por 5 min (coleta indisponível)
 ,f3697058,208,boot,fw 3.0.7 reset=1
 ,f3697058,209,boot,fw 3.0.7 reset=1
+,f3697058,215,boot,fw 3.0.7 reset=1
