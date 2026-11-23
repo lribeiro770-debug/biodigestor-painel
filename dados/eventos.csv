@@ -150,6 +150,8 @@ ts,serie,n,tipo,detalhe
 1795455582,f3697058,261,boot,fw 3.0.7 reset=9
 1795463544,f3697058,265,hora,coletor (relógio acertado)
 1795463548,f3697058,266,coleta,Lucas ate 1596
+1795463551,f3697058,267,coleta,Lucas ate 1596
+1795463625,f3697058,268,coleta,Lucas ate 1598
 ,f3697058,1,boot,fw 3.0.1 reset=1
 ,f3697058,2,wifi_on,BLZ RIBEIRO
 ,f3697058,4,boot,fw 3.0.1 reset=1
