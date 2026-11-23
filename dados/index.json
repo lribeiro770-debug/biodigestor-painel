@@ -6,12 +6,12 @@
  ],
  "series": {
   "f3697058": {
-   "ultimo_n": 544,
-   "ultimo_ev": 210
+   "ultimo_n": 670,
+   "ultimo_ev": 226
   }
  },
- "ultimo_ts": 1795398040,
- "atualizado": 1795398066,
+ "ultimo_ts": 1795405994,
+ "atualizado": 1795406013,
  "colunas": [
   "ts",
   "t_dig",
