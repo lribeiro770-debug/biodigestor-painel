@@ -152,6 +152,12 @@ ts,serie,n,tipo,detalhe
 1795463548,f3697058,266,coleta,Lucas ate 1596
 1795463551,f3697058,267,coleta,Lucas ate 1596
 1795463625,f3697058,268,coleta,Lucas ate 1598
+1795463643,f3697058,269,coleta,Lucas ate 1598
+1795463917,f3697058,270,portal,portal de Wi-Fi aberto por 5 min (coleta indisponível)
+1795463946,f3697058,271,portal,portal fechado; API de coleta ativa
+1795463946,f3697058,272,wifi_on,Galaxy A513C76
+1795464535,f3697058,273,alarme_off,T_DIG_VARIACAO_RAPIDA
+1795465654,f3697058,274,wifi_off,
 ,f3697058,1,boot,fw 3.0.1 reset=1
 ,f3697058,2,wifi_on,BLZ RIBEIRO
 ,f3697058,4,boot,fw 3.0.1 reset=1
