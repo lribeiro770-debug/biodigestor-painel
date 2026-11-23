@@ -113,6 +113,20 @@ ts,serie,n,tipo,detalhe
 1795399795,f3697058,224,alarme_on,SENSOR_DHT
 1795400666,f3697058,225,alarme_off,MQ7_ALTERADO
 1795403191,f3697058,226,wifi_off,
+1795406007,f3697058,227,coleta,Lucas ate 670
+1795406192,f3697058,228,wifi_on,Galaxy A513C76
+1795406403,f3697058,229,wifi_off,
+1795412357,f3697058,230,sd_erro,cartão falhou/ausente e voltou (amostras do intervalo perdidas)
+1795419115,f3697058,231,boot,fw 3.0.7 reset=9
+1795419664,f3697058,232,boot,fw 3.0.7 reset=9
+1795419679,f3697058,233,alarme_on,SENSOR_DHT
+1795423314,f3697058,234,boot,fw 3.0.7 reset=9
+1795423328,f3697058,235,alarme_on,SENSOR_DHT
+1795423345,f3697058,236,boot,fw 3.0.7 reset=9
+1795423360,f3697058,237,alarme_on,SENSOR_DHT
+1795424838,f3697058,238,boot,fw 3.0.7 reset=9
+1795424852,f3697058,239,alarme_on,SENSOR_DHT
+1795435461,f3697058,240,hora,coletor (relógio acertado)
 ,f3697058,1,boot,fw 3.0.1 reset=1
 ,f3697058,2,wifi_on,BLZ RIBEIRO
 ,f3697058,4,boot,fw 3.0.1 reset=1
