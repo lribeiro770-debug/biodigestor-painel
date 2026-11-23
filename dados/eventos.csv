@@ -160,6 +160,7 @@ ts,serie,n,tipo,detalhe
 1795465654,f3697058,274,wifi_off,
 1795466092,f3697058,275,coleta,Lucas ate 1639
 1795466319,f3697058,276,alarme_on,T_DIG_VARIACAO_RAPIDA
+1795466539,f3697058,277,coleta,Lucas ate 1646
 ,f3697058,1,boot,fw 3.0.1 reset=1
 ,f3697058,2,wifi_on,BLZ RIBEIRO
 ,f3697058,4,boot,fw 3.0.1 reset=1
@@ -273,3 +274,4 @@ ts,serie,n,tipo,detalhe
 ,f3697058,215,boot,fw 3.0.7 reset=1
 ,f3697058,262,boot,fw 3.0.7 reset=1
 ,f3697058,263,boot,fw 3.0.7 reset=1
+,f3697058,278,boot,fw 3.0.7 reset=1
