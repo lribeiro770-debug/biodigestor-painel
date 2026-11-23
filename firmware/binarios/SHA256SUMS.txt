@@ -1,0 +1,2 @@
+f45f8f16ae25c03cce82d1e2b0716b19a5c8a98d3c55593f8767ae1ef3f19353  biodigestor_v3.0.8_completo_0x0.bin
+0c83f7f2729e99c4aed908854e8e9fb5e851f99dbc34ac236474561e13c3acbd  biodigestor_v3.0.8_ota_0x10000.bin
