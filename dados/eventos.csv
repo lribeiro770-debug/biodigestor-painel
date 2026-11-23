@@ -128,6 +128,22 @@ ts,serie,n,tipo,detalhe
 1795424852,f3697058,239,alarme_on,SENSOR_DHT
 1795435461,f3697058,240,hora,coletor (relógio acertado)
 1795435461,f3697058,241,coleta,Lucas ate 1140
+1795435488,f3697058,242,coleta,Lucas ate 1140
+1795435562,f3697058,243,wifi_on,Galaxy A513C76
+1795435566,f3697058,244,diario,alimentacao 2.00 kg | Lucas Ribeiro | Janta do R.U.
+1795435566,f3697058,245,diario,queima azul com pontas amarelas  | Lucas Ribeiro |
+1795435567,f3697058,246,diario,retirada 1.00 L | Lucas Ribeiro |
+1795435674,f3697058,247,alarme_on,ESTRATIFICACAO
+1795435806,f3697058,248,wifi_off,
+1795435976,f3697058,249,alarme_off,ESTRATIFICACAO
+1795447094,f3697058,250,sd_erro,cartão falhou/ausente e voltou (amostras do intervalo perdidas)
+1795448460,f3697058,251,sd_erro,cartão falhou/ausente e voltou (amostras do intervalo perdidas)
+1795449299,f3697058,252,boot,fw 3.0.7 reset=9
+1795449313,f3697058,253,alarme_on,SENSOR_DHT
+1795450213,f3697058,254,sd_erro,cartão falhou/ausente e voltou (amostras do intervalo perdidas)
+1795451399,f3697058,255,wifi_on,Galaxy A513C76
+1795451405,f3697058,256,hora,ntp (relógio acertado)
+1795452147,f3697058,257,wifi_off,
 ,f3697058,1,boot,fw 3.0.1 reset=1
 ,f3697058,2,wifi_on,BLZ RIBEIRO
 ,f3697058,4,boot,fw 3.0.1 reset=1
