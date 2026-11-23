@@ -642,14 +642,23 @@ const fmtDur = s => { if (s == null) return "?"; const h = Math.floor(s / 3600),
 const signal = rssi => { const n = rssi >= -60 ? 4 : rssi >= -70 ? 3 : rssi >= -80 ? 2 : 1; return `<span class="bars" aria-hidden="true">${[4, 7, 10, 12].map((h, i) => `<i class="${i < n ? "on" : ""}" style="height:${h}px"></i>`).join("")}</span>`; };
 
 function renderComps() {
-  const j = last || {}, on = devOnline(), al = new Set(j.alarmes || []), OFF = ["off", "sem dados", "—"];
+  let j = last || {}, on = devOnline(), offData = false;
+  if (!on && nuvemInfo) {                          // sem conexão ao vivo: mostra o estado da última leitura coletada
+    const u = [...store.values()].reduce((m, r) => (!m || r.x > m.x) ? r : m, null);
+    if (u) {
+      offData = true; on = true;
+      j = { t_dig: u.t1, t_dig2: u.t2, t_amb: u.ta, ur_amb: u.ur, p_pa: u.p, alarmes: [], gas_ok: true,
+            mq2: u.g2 == null ? null : { rs: 1, rel: u.g2 }, mq7: u.g7 == null ? null : { rs: 1, rel: u.g7 } };
+    }
+  }
+  const al = new Set(j.alarmes || []), OFF = ["off", "sem dados", "—"];
   const mq = (o, sAl, sFail) => !on ? OFF : j.gas_ok === false ? ["wait", "aquecendo", j.up != null ? `pré-aquecimento: faltam ~${Math.max(1, Math.ceil((900 - j.up) / 60))} min` : "pré-aquecimento (15 min)"]
     : (!o || o.rs == null || al.has(sFail)) ? ["crit", "falha", "sem leitura"] : o.rel == null ? ["warn", "não calibrado", `Rs ${f(o.rs / 1000)} kΩ`]
     : (o.rel < LIMITES.gas || al.has(sAl)) ? ["crit", "alarme", `Rs/R0 ${f(o.rel, 2)}`] : ["ok", "ok", `Rs/R0 ${f(o.rel, 2)}`];
   const temp = (v, s) => !on ? OFF : (v == null || al.has(s)) ? ["crit", "falha", "sem leitura"] : ["ok", "ok", `${f(v)} °C`];
   const C = [
-    ["chip", "ESP32", on ? ["ok", "online", `fw ${j.fw || "?"} · ativo há ${fmtDur(j.up)}`] : ["crit", "offline", lastMsg ? `último dado ${fmtAgo(lastMsg)}` : "aguardando"]],
-    ["wifi", "WiFi", !on ? OFF : [j.rssi >= -80 ? "ok" : "warn", j.rssi >= -60 ? "excelente" : j.rssi >= -70 ? "bom" : j.rssi >= -80 ? "fraco" : "crítico", `${j.rssi} dBm`, signal(j.rssi)]],
+    ["chip", "ESP32", (on && !offData) ? ["ok", "online", `fw ${j.fw || "?"} · ativo há ${fmtDur(j.up)}`] : ["crit", "offline", lastMsg ? `último dado ${fmtAgo(lastMsg)}` : "aguardando"]],
+    ["wifi", "WiFi", (!on || offData) ? OFF : [j.rssi >= -80 ? "ok" : "warn", j.rssi >= -60 ? "excelente" : j.rssi >= -70 ? "bom" : j.rssi >= -80 ? "fraco" : "crítico", `${j.rssi} dBm`, signal(j.rssi)]],
     ["therm", "Sonda 1", temp(j.t_dig, "SENSOR_T_DIG1"), "DS18B20 · "],
     ["therm", "Sonda 2", temp(j.t_dig2, "SENSOR_T_DIG2"), "DS18B20 · "],
     ["drop", "Ambiente", !on ? OFF : j.t_amb == null ? ["crit", "falha", "sem leitura"] : ["ok", "ok", `DHT11 · ${f(j.t_amb)} °C · ${f(j.ur_amb, 0)} %`]],
@@ -659,14 +668,14 @@ function renderComps() {
       : j.p_pa > LIMITES.pMax ? ["crit", "sobrepressão", `${f(j.p_pa, 0)} Pa`] : ["ok", "ok", `${f(j.p_pa, 0)} Pa · ${f(j.p_pa / 98.07)} cmH₂O`]]
   ];
   if ("valv" in j) C.push(["valve", "Válvula", !on ? OFF : [j.valv ? "warn" : "ok", j.valv ? "aberta" : "fechada", `${j.ciclos ?? 0} ciclos`]]);
-  if ("rele" in j) C.push(["relay", "Relé (alarme)", !on ? OFF : j.rele ? ["crit", "ACIONADO", "sirene/luz ligada"] : ["ok", "em espera", "desligado"]]);
-  C.push(["bell", "Alarme sonoro", !on ? OFF : j.mudo ? ["warn", "silenciado", "por até 30 min"] : ["ok", "ativo", "buzzer habilitado"]]);
-  C.push(["box", "Fila offline", !on ? OFF : j.fila > 0 ? ["warn", "reenviando", `${Math.round(j.fila / 1024)} kB pendentes`] : ["ok", "vazia", "tudo enviado"]]);
+  if ("rele" in j && !offData) C.push(["relay", "Relé (alarme)", !on ? OFF : j.rele ? ["crit", "ACIONADO", "sirene/luz ligada"] : ["ok", "em espera", "desligado"]]);
+  C.push(["bell", "Alarme sonoro", (!on || offData) ? OFF : j.mudo ? ["warn", "silenciado", "por até 30 min"] : ["ok", "ativo", "buzzer habilitado"]]);
+  C.push(["box", "Fila offline", (!on || offData) ? OFF : j.fila > 0 ? ["warn", "reenviando", `${Math.round(j.fila / 1024)} kB pendentes`] : ["ok", "vazia", "tudo enviado"]]);
   $("comps").innerHTML = C.map(([ic, n, [s, lbl, det, extra], pre]) => `<div class="card comp" style="box-shadow:inset 3px 0 0 ${ST[s][2]}">
     <div class="ci" style="color:var(--ink-2)">${CI[ic]}</div><div class="cn"><span>${esc(n)}</span>${stBadge(s, lbl)}</div>
     <div class="cv">${esc((pre && s === "ok" ? pre : "") + det)}${extra || ""}</div></div>`).join("");
   const nOk = C.filter(c => c[2][0] === "ok").length, nCrit = C.filter(c => c[2][0] === "crit").length;
-  $("compInfo").textContent = `${nOk} de ${C.length} em operação normal${nCrit ? ` · ${nCrit} com falha ou alarme` : ""}`;
+  $("compInfo").textContent = `${nOk} de ${C.length} em operação normal${nCrit ? ` · ${nCrit} com falha ou alarme` : ""}${offData ? " · sensores conforme a última leitura coletada" : ""}`;
 }
 
 function renderBanner() {
