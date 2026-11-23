@@ -127,6 +127,7 @@ ts,serie,n,tipo,detalhe
 1795424838,f3697058,238,boot,fw 3.0.7 reset=9
 1795424852,f3697058,239,alarme_on,SENSOR_DHT
 1795435461,f3697058,240,hora,coletor (relógio acertado)
+1795435461,f3697058,241,coleta,Lucas ate 1140
 ,f3697058,1,boot,fw 3.0.1 reset=1
 ,f3697058,2,wifi_on,BLZ RIBEIRO
 ,f3697058,4,boot,fw 3.0.1 reset=1
