@@ -131,7 +131,9 @@ label.btn { font-size: 14px; color: var(--ink) }
 /* ---------- Gráficos ---------- */
 .charts { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px }
 .charts .card { padding: 14px 16px 10px; display: flex; flex-direction: column; min-width: 0 }
-.w4 { grid-column: span 4 } .w3 { grid-column: span 3 } .w2 { grid-column: span 2 }
+.w6 { grid-column: span 6 } .w4 { grid-column: span 4 } .w3 { grid-column: span 3 } .w2 { grid-column: span 2 }
+.al-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 0 }
+.cv-box.al { height: auto; min-height: 90px }
 @media (max-width: 1000px) { .w4, .w3, .w2 { grid-column: span 6 } }
 .ch-h { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 6px; flex-wrap: wrap }
 .ch-h h3 { margin: 0; font-size: 14px; font-weight: 620 }
@@ -268,13 +270,20 @@ pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; color: var
       <div class="ch-h"><div><h3>Sensores de gás</h3><p>Rs/R0 · abaixo de 0,50 = alarme</p></div><div class="legend" id="lgG"></div></div>
       <div class="cv-box sm"><canvas id="chG"></canvas><div class="empty" id="emG">Sem dados no período</div></div>
     </div>
-    <div class="card w3">
+    <div class="card w6">
       <div class="ch-h"><div><h3>Umidade relativa do ar</h3><p>% · acima de 90 % = risco de condensação</p></div></div>
       <div class="cv-box sm"><canvas id="chU"></canvas><div class="empty" id="emU">Sem dados no período</div></div>
     </div>
-    <div class="card w3">
-      <div class="ch-h"><div><h3>Linha do tempo de alarmes</h3><p>número de alarmes ativos por intervalo</p></div></div>
-      <div class="cv-box sm"><canvas id="chA"></canvas><div class="empty" id="emA">Nenhum alarme no período</div></div>
+    <div class="card w6">
+      <div class="ch-h"><div><h3>Linha do tempo de alarmes</h3><p>cada faixa = período em que o alarme esteve ativo · passe o mouse para ver início, fim e duração</p></div>
+        <div class="legend"><span><span class="al-dot" style="background:var(--crit)"></span>segurança</span> <span><span class="al-dot" style="background:var(--warn)"></span>processo</span> <span><span class="al-dot" style="background:var(--serious)"></span>falha de sensor</span></div></div>
+      <div class="cv-box al" id="boxA"><canvas id="chA"></canvas><div class="empty" id="emA">Nenhum alarme no período</div></div>
+    </div>
+    <div class="card w6">
+      <div class="ch-h"><div><h3>Ocorrências de alarmes</h3><p id="ocSub">episódios no período selecionado, do mais recente ao mais antigo</p></div>
+        <button class="btn" id="bOcCsv">Exportar ocorrências</button></div>
+      <div class="tbl" style="padding:0"><table id="ocTab"><thead><tr><th style="text-align:left">Alarme</th><th>Início</th><th>Fim</th><th>Duração</th><th style="text-align:left">Valor no período</th></tr></thead><tbody></tbody></table>
+      <div class="empty on" id="emOc" style="position:static;padding:14px">Nenhum alarme no período</div></div>
     </div>
   </div>
 
@@ -421,7 +430,7 @@ function addRec(r) {
 function recFromTelem(j) {
   return { x: j.ts ? j.ts * 1000 : Date.now(), t1: j.t_dig, t2: j.t_dig2, ta: j.t_amb, ur: j.ur_amb,
            g2: j.gas_ok ? j.mq2?.rel : null, g7: j.gas_ok ? j.mq7?.rel : null, p: j.p_pa, vol: j.vol_nl ?? j.vol_l,
-           nal: (j.alarmes || []).filter(a => a !== "MQ_NAO_CALIBRADO").length, sim: !!j.sim, src: "live" };
+           nal: (j.alarmes || []).filter(a => a !== "MQ_NAO_CALIBRADO").length, al: (j.alarmes || []).filter(a => a !== "MQ_NAO_CALIBRADO"), sim: !!j.sim, src: "live" };
 }
 const sortedAll = () => [...store.values()].sort((a, b) => a.x - b.x);
 function curRange() {
@@ -501,8 +510,12 @@ function buildCharts() {
   charts.G = new Chart($("chG"), { type: "line", data: { datasets: [line("MQ-2", s1), line("MQ-7", s2)] }, options: baseOpts("", 2, { y: { suggestedMin: 0.3, suggestedMax: 1.1 }, refs: { lines: [{ y: LIMITES.gas, color: crit, label: "alarme" }] } }) });
   charts.U = new Chart($("chU"), { type: "line", data: { datasets: [line("Umidade", s1, true)] }, options: baseOpts("%", 0, { y: { suggestedMin: 30, suggestedMax: 100 }, refs: { lines: [{ y: LIMITES.ur, color: crit, label: "condensação" }] } }) });
   charts.V = new Chart($("chV"), { type: "bar", data: { datasets: [bar("Biogás", s1)] }, options: { ...baseOpts("NL", 2, { y: { beginAtZero: true } }), interaction: { mode: "nearest", intersect: false, axis: "x" } } });
-  charts.A = new Chart($("chA"), { type: "bar", data: { datasets: [bar("Alarmes ativos", css("--serious"))] },
-    options: { ...baseOpts("", 0, { y: { beginAtZero: true, suggestedMax: 3, ticks: { precision: 0, color: css("--muted") } } }), interaction: { mode: "nearest", intersect: false, axis: "x" } } });
+  const oA = baseOpts("", 0);
+  oA.indexAxis = "y"; oA.parsing = true; oA.interaction = { mode: "nearest", intersect: true };
+  oA.scales.y = { type: "category", ticks: { color: css("--ink-2"), font: { size: 11 } }, grid: { display: false }, border: { display: false } };
+  oA.plugins.tooltip.callbacks = { title: c => c[0].raw.nome, label: c => { const e = c.raw.ep;
+    return ` ${dataHora(e.ini)} → ${e.ativo ? "em andamento" : dataHora(e.fim)} · ${dur(e.fim - e.ini)}${e.valor ? " · " + e.valor : ""}`; } };
+  charts.A = new Chart($("chA"), { type: "bar", data: { datasets: [{ label: "Alarmes", data: [], backgroundColor: [], borderRadius: 3, borderSkipped: false, barPercentage: .7, categoryPercentage: .9, minBarLength: 3 }] }, options: oA });
 }
 
 // ---------------------------------------------------------------- Cálculos
@@ -523,6 +536,62 @@ function alarmSeries(rows, ms) {
   for (const r of rows) { if (!r.nal) continue; const b = Math.floor(r.x / ms) * ms + ms / 2; out.set(b, Math.max(out.get(b) || 0, r.nal)); }
   return [...out].map(([x, y]) => ({ x, y }));
 }
+// ---------------------------------------------------------------- Alarmes: episódios (início, fim, duração) a partir dos nomes gravados em cada leitura
+const AL_COR = { crit: "--crit", warn: "--warn", serious: "--serious", info: "--muted" };
+const dataHora = ms => new Date(ms).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+const dur = ms => { const m = Math.max(1, Math.round(ms / 60e3)); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")} min`; };
+const AL_VAL = { GAS_COMBUSTIVEL: ["g2", "min", "MQ-2 Rs/R0 mín."], MQ7_ALTERADO: ["g7", "min", "MQ-7 Rs/R0 mín."], CO_ALTO: ["g7", "min", "MQ-7 Rs/R0 mín."],
+  SOBREPRESSAO: ["p", "max", "pressão máx.", "Pa"], T_DIG_BAIXA: ["tm", "min", "mín.", "°C"], T_DIG_ALTA: ["tm", "max", "máx.", "°C"],
+  ESTRATIFICACAO: ["dt", "max", "|ΔT| máx.", "°C"], UMIDADE_ALTA: ["ur", "max", "máx.", "%"] };
+function episodios(rows) {
+  const GAP = 10 * 60e3, abertos = new Map(), out = [], lastX = rows.length ? rows.at(-1).x : 0;
+  const fecha = (nome, e) => { abertos.delete(nome); out.push(e); };
+  for (const r of rows) {
+    if (!r.al) continue;
+    for (const [nome, e] of abertos) if (!r.al.includes(nome) || r.x - e.fim > GAP) fecha(nome, e);
+    for (const nome of r.al) {
+      let e = abertos.get(nome);
+      if (!e) { e = { nome, ini: r.x, fim: r.x, n: 0, v: null }; abertos.set(nome, e); }
+      e.fim = r.x; e.n++;
+      const cfg = AL_VAL[nome];
+      if (cfg) { const v = cfg[0] === "dt" ? (r.t1 != null && r.t2 != null ? Math.abs(r.t1 - r.t2) : null) : r[cfg[0]];
+        if (v != null) e.v = e.v == null ? v : cfg[1] === "min" ? Math.min(e.v, v) : Math.max(e.v, v); }
+    }
+  }
+  for (const [nome, e] of abertos) { e.ativo = lastX - e.fim < GAP && devOnline(); out.push(e); }
+  for (const e of out) { const cfg = AL_VAL[e.nome];
+    e.valor = cfg && e.v != null ? `${cfg[2]} ${f(e.v, cfg[3] ? (cfg[3] === "Pa" || cfg[3] === "%" ? 0 : 1) : 2)}${cfg[3] ? " " + cfg[3] : ""}` : "";
+    if (e.fim === e.ini) e.fim = e.ini + 60e3; }
+  return out.sort((a, b) => b.ini - a.ini);
+}
+const alNome = k => (AL[k] || ["warn", k])[1];
+let ultimosEp = [];
+function renderAlarmes(rows) {
+  const eps = episodios(rows); ultimosEp = eps;
+  const tipos = [...new Set(eps.map(e => e.nome))];
+  const ch = charts.A;
+  ch.data.labels = tipos.map(alNome);
+  ch.data.datasets[0].data = eps.map(e => ({ x: [e.ini, e.fim], y: alNome(e.nome), nome: alNome(e.nome), ep: e }));
+  ch.data.datasets[0].backgroundColor = eps.map(e => css(AL_COR[(AL[e.nome] || ["warn"])[0]] || "--warn"));
+  $("boxA").style.height = Math.max(90, 40 + tipos.length * 34) + "px";
+  const tb = $("ocTab").querySelector("tbody"); tb.innerHTML = "";
+  for (const e of eps.slice(0, 60)) {
+    const tr = document.createElement("tr"), cor = css(AL_COR[(AL[e.nome] || ["warn"])[0]] || "--warn");
+    tr.innerHTML = `<td style="text-align:left"><span class="al-dot" style="background:${cor}"></span>${esc(alNome(e.nome))}</td><td>${dataHora(e.ini)}</td>` +
+      `<td>${e.ativo ? "<b>em andamento</b>" : dataHora(e.fim)}</td><td>${dur(e.fim - e.ini)}</td><td style="text-align:left">${esc(e.valor || "—")}</td>`;
+    tb.appendChild(tr);
+  }
+  $("emOc").classList.toggle("on", !eps.length); $("ocTab").style.display = eps.length ? "" : "none";
+  $("ocSub").textContent = eps.length ? `${eps.length} episódio(s) no período${eps.length > 60 ? " · mostrando os 60 mais recentes" : ""}, do mais recente ao mais antigo` : "episódios no período selecionado";
+  return eps.length;
+}
+$("bOcCsv").onclick = () => {
+  if (!ultimosEp.length) return log("nenhuma ocorrência no período");
+  const lin = ["alarme;inicio;fim;duracao_min;valor"].concat(ultimosEp.map(e => [alNome(e.nome), new Date(e.ini).toLocaleString("pt-BR"),
+    e.ativo ? "em andamento" : new Date(e.fim).toLocaleString("pt-BR"), Math.round((e.fim - e.ini) / 60e3), e.valor].join(";")));
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["\ufeff" + lin.join("\n")], { type: "text/csv" }));
+  a.download = `alarmes_biodigestor_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+};
 function valueAt(rows, k, t) { let v = null; for (const r of rows) { if (r.x > t) break; if (r[k] != null) v = r[k]; } return v; }
 function sparkline(svg, pts, color) {
   pts = pts.filter(p => p.y != null); svg.innerHTML = ""; if (pts.length < 2) return;
@@ -552,11 +621,11 @@ function doRender() {
   charts.U.data.datasets[0].data = series(rows, "ur");
   const bms = bucketMs(span); $("pvSub").textContent = bucketLbl(bms);
   const prodS = producao(rows, bms); charts.V.data.datasets[0].data = prodS;
-  charts.A.data.datasets[0].data = alarmSeries(rows, span <= 6 * 3600e3 ? 5 * 60e3 : 30 * 60e3);
+  const nEp = renderAlarmes(rows);
   const em = (id, on) => $(id).classList.toggle("on", on);
   em("emT", !has(rows, "t1") && !has(rows, "t2") && !has(rows, "ta")); em("emDT", !rows.some(r => r.t1 != null && r.t2 != null));
   em("emP", !has(rows, "p")); em("emG", !has(rows, "g2") && !has(rows, "g7")); em("emU", !has(rows, "ur"));
-  em("emV", !temVol(rows)); em("emA", !rows.some(r => r.nal));
+  em("emV", !temVol(rows)); em("emA", !nEp);
   for (const c of Object.values(charts)) c.update("none");
 
   $("lgT").innerHTML = [["Sonda 1", "--s1", "t1"], ["Sonda 2", "--s2", "t2"], ["Ambiente", "--ctx", "ta"]].map(([n, c, k]) => `<span><i style="background:var(${c})"></i>${n} <b>${f(lastOf(k))} °C</b></span>`).join("");
@@ -863,9 +932,10 @@ function lerCsv(txt, src) {
     const c = ln.split(sep); let ts = g(c, "ts");
     if (ts == null && ix("ts_iso") >= 0) ts = Date.parse(c[ix("ts_iso")]) / 1000;
     if (!ts) continue;
-    const nal = ix("alarmes") >= 0 ? (c[ix("alarmes")] || "").split("|").filter(a => a && a !== "MQ_NAO_CALIBRADO").length : g(c, "n_alarmes") || 0;
+    const al = ix("alarmes") >= 0 ? (c[ix("alarmes")] || "").split("|").filter(a => a && a !== "MQ_NAO_CALIBRADO") : null;
+    const nal = al ? al.length : g(c, "n_alarmes") || 0;
     addRec({ x: ts * 1000, t1: g(c, "t_dig"), t2: g(c, "t_dig2"), ta: g(c, "t_amb"), ur: g(c, "ur_amb"), g2: g(c, "mq2_rel"), g7: g(c, "mq7_rel"),
-             p: g(c, "p_pa"), vol: g(c, "vol_nl") ?? g(c, "vol_l"), nal, sim: g(c, "sim") === 1, src }); n++;
+             p: g(c, "p_pa"), vol: g(c, "vol_nl") ?? g(c, "vol_l"), nal, al, sim: g(c, "sim") === 1, src }); n++;
   }
   return n;
 }
